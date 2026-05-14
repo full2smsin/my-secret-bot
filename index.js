@@ -2,7 +2,6 @@ const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
 const crypto = require('crypto');
-const path = require('path');
 
 const app = express();
 app.use(express.json());
@@ -20,9 +19,6 @@ const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
 const search_lock_file = 'search_lock.json'; 
-
-// रेंडर का अपना लाइव यूआरएल (व्हाट्सएप लिंक जनरेट करने के लिए काम आएगा)
-let server_url = "onrender.com";
 
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
 if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
@@ -160,7 +156,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक और व्हाट्सएप शेयर बटन लॉजिक (फिक्स्ड)
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (बटन पूरी तरह हटा दिए गए हैं)
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -171,24 +167,11 @@ bot.on('message', async (msg) => {
                 if (vault[key]) {
                     let decrypted_file_id = decryptData(vault[key].file_id, secret_password);
                     if (decrypted_file_id) {
-                        // 🟢 व्हाट्सएप शेयरिंग लिंक जनरेट करना
-                        let raw_download_url = `telegram.org{token}/${decrypted_file_id}`;
-                        let whatsapp_share_url = `whatsapp.com{encodeURIComponent("Bhai, ye lo document: " + key + " \n" + raw_download_url)}`;
-
-                        let opts = {
-                            caption: `🎯 Decrypted: ${key}`,
-                            reply_markup: {
-                                inline_keyboard: [[
-                                    { text: "🟢 Share on WhatsApp", url: whatsapp_share_url }
-                                ]]
-                            }
-                        };
-
                         if (vault[key].type === "photo") {
-                            let sent = await bot.sendPhoto(chatId, decrypted_file_id, opts);
+                            let sent = await bot.sendPhoto(chatId, decrypted_file_id, { caption: `🎯 Decrypted: ${key}` });
                             autoDeleteMessage(chatId, sent.message_id);
                         } else {
-                            let sent = await bot.sendDocument(chatId, decrypted_file_id, opts);
+                            let sent = await bot.sendDocument(chatId, decrypted_file_id, { caption: `🎯 Decrypted: ${key}` });
                             autoDeleteMessage(chatId, sent.message_id);
                         }
                     }
@@ -240,7 +223,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ फिक्स: एडिट कैप्शन इंडेक्स वैलिडेशन
+    // ⚙️ एडिट कैप्शन लॉजिक
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -269,7 +252,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ फिक्स: पिन चेंज इंडेक्स वैलिडेशन
+    // ⚙️ पिन चेंज लॉजिक
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -327,7 +310,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // बिना नाम की पेंडिंग फाइल सेव करना (डुप्लिकेट चेक के साथ फिक्स)
+    // बिना नाम की पेंडिंग फाइल सेव करना
     if (fs.existsSync(pending_file)) {
         let pending_data = JSON.parse(fs.readFileSync(pending_file));
         if (Object.keys(pending_data).length > 0) {
@@ -374,7 +357,7 @@ bot.on('message', async (msg) => {
     autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
 });
 
-// 2. फ़ाइल अपलोड हैंडलिंग (🚨 100% डुप्लिकेट इमेज/डॉक्यूमेंट चेक फिक्स)
+// 2. फ़ाइल अपलोड हैंडलिंग
 bot.on('document', async (msg) => { handleIncomingFile(msg, 'document', msg.document.file_id); });
 bot.on('photo', async (msg) => { handleIncomingFile(msg, 'photo', msg.photo[msg.photo.length - 1].file_id); });
 
@@ -391,7 +374,6 @@ async function handleIncomingFile(msg, type, file_id) {
     let secret_password = config_data.password;
     let vault = JSON.parse(fs.readFileSync(db_file));
     
-    // 🚨 फिक्स: इमेज का यूनिक SHA-256 हैश बनाना ताकि डुप्लिकेट चेक कभी फेल न हो
     let current_file_hash = generateFileHash(file_id);
 
     for (let key in vault) {
@@ -405,7 +387,7 @@ async function handleIncomingFile(msg, type, file_id) {
     let file_info = { 
         file_id: file_id, 
         type: type,
-        hash: current_file_hash // हैश को सेव करना ताकि अगली बार डुप्लिकेट पकड़ में आए
+        hash: current_file_hash
     };
 
     if (msg.caption && msg.caption.trim() !== "") {
@@ -428,5 +410,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Upgraded with WhatsApp Sharing and Anti-Duplicate!'));
+app.get('/', (req, res) => res.send('Bot Status: Cleaned and 100% Validated!'));
 app.listen(process.env.PORT || 3000);
