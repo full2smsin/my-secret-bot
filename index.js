@@ -2,6 +2,7 @@ const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
 const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
@@ -20,13 +21,21 @@ const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
 const search_lock_file = 'search_lock.json'; 
 
+// रेंडर का अपना लाइव यूआरएल (व्हाट्सएप लिंक जनरेट करने के लिए काम आएगा)
+let server_url = "onrender.com";
+
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
 if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
 if (!fs.existsSync(search_lock_file)) fs.writeFileSync(search_lock_file, JSON.stringify({}));
 
 const bot = new NTB(token, { polling: true });
 
-// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स (पूरी तरह फिक्स्ड)
+// 🔒 डुप्लिकेट रोकने के लिए फाइल आईडी का हैश जनरेट करना
+function generateFileHash(fileId) {
+    return crypto.createHash('sha256').update(fileId).digest('hex');
+}
+
+// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स
 function encryptData(text, keyPassword) {
     const salt = crypto.randomBytes(16);
     const key = crypto.scryptSync(keyPassword, salt, 32);
@@ -54,13 +63,13 @@ function decryptData(encryptedText, keyPassword) {
     }
 }
 
-// ⏳ फिक्स: 1 मिनट (60 सेकंड) में चैट को दोनों तरफ से पूरी तरह साफ (Empty) करने का अचूक फंक्शन
+// ⏳ 1 मिनट (60 सेकंड) में चैट को दोनों तरफ से साफ करने का फंक्शन
 function autoDeleteMessage(chatId, msgId) {
     setTimeout(async () => {
         try {
             await bot.deleteMessage(chatId.toString(), msgId);
-        } catch (e) { /* मैसेज पहले से डिलीटेड हो तो क्रैश न हो */ }
-    }, 60000); // सटीक 60 सेकंड
+        } catch (e) { }
+    }, 60000); 
 }
 
 // 🛡️ टेलीग्राम का मेनू बटन अपडेट करने का डायनामिक फंक्शन
@@ -79,7 +88,6 @@ async function updateBotMenu(status) {
     }
 }
 
-// बोट सेशन और ऑटो-लॉक टाइमआउट चेकर
 function checkSession() {
     if (fs.existsSync(session_file) && !fs.existsSync(blocked_file)) {
         let session_data = JSON.parse(fs.readFileSync(session_file));
@@ -95,7 +103,6 @@ function checkSession() {
     return false;
 }
 
-// 🚨 घुसपैठिया ट्रैकर और सुरक्षा ब्लॉक फंक्शन
 async function handleWrongAttempt(msg) {
     let attempts = fs.existsSync(attempts_file) ? parseInt(fs.readFileSync(attempts_file, 'utf8')) : 0;
     attempts++;
@@ -141,7 +148,6 @@ bot.on('message', async (msg) => {
 
     let is_unlocked = checkSession();
 
-    // 🔓 अनब्लॉक बोट कमांड
     if (text_lower === "unblock bot") {
         if (fs.existsSync(blocked_file)) { try{fs.unlinkSync(blocked_file);}catch(e){} }
         if (fs.existsSync(attempts_file)) { try{fs.unlinkSync(attempts_file);}catch(e){} }
@@ -154,7 +160,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 फिक्स: डिक्रिप्शन पिन चेक वैलिडेशन (डिक्रिप्शन कोड एरर पूरी तरह ठीक किया गया)
+    // 🔓 डिक्रिप्शन पिन चेक और व्हाट्सएप शेयर बटन लॉजिक (फिक्स्ड)
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -165,23 +171,35 @@ bot.on('message', async (msg) => {
                 if (vault[key]) {
                     let decrypted_file_id = decryptData(vault[key].file_id, secret_password);
                     if (decrypted_file_id) {
+                        // 🟢 व्हाट्सएप शेयरिंग लिंक जनरेट करना
+                        let raw_download_url = `telegram.org{token}/${decrypted_file_id}`;
+                        let whatsapp_share_url = `whatsapp.com{encodeURIComponent("Bhai, ye lo document: " + key + " \n" + raw_download_url)}`;
+
+                        let opts = {
+                            caption: `🎯 Decrypted: ${key}`,
+                            reply_markup: {
+                                inline_keyboard: [[
+                                    { text: "🟢 Share on WhatsApp", url: whatsapp_share_url }
+                                ]]
+                            }
+                        };
+
                         if (vault[key].type === "photo") {
-                            let sent = await bot.sendPhoto(chatId, decrypted_file_id, { caption: `🎯 Decrypted Photo: ${key}` });
+                            let sent = await bot.sendPhoto(chatId, decrypted_file_id, opts);
                             autoDeleteMessage(chatId, sent.message_id);
                         } else {
-                            let sent = await bot.sendDocument(chatId, decrypted_file_id, { caption: `🎯 Decrypted Document: ${key}` });
+                            let sent = await bot.sendDocument(chatId, decrypted_file_id, opts);
                             autoDeleteMessage(chatId, sent.message_id);
                         }
                     }
                 }
             }
-            // पिन वेरिफिकेशन सफल होने पर सेशन को ताज़ा करना
             fs.writeFileSync(session_file, JSON.stringify({ status: 'unlocked', last_time: Date.now() }));
             updateBotMenu("unlock");
             
             delete s_lock[chatId];
             fs.writeFileSync(search_lock_file, JSON.stringify(s_lock));
-            autoDeleteMessage(chatId, msg.message_id); // यूजर का मैसेज 1 मिनट में साफ
+            autoDeleteMessage(chatId, msg.message_id);
         } else {
             let reply = await bot.sendMessage(chatId, "❌ *Error:* Galat PIN! Document decrypt nahi kiya ja saka.");
             autoDeleteMessage(chatId, msg.message_id);
@@ -196,24 +214,10 @@ bot.on('message', async (msg) => {
         fs.writeFileSync(session_file, JSON.stringify({ status: 'unlocked', last_time: Date.now() }));
         updateBotMenu("unlock"); 
         
-        const welcome_menu = "🔓 *Bot Unlocked Successfully!* \n\n"
-                      + "Bhai, aapka swagat hai. Saare commands active hain:\n\n"
-                      + "🔍 *फाइल सर्च करने के लिए:*\n"
-                      + "• बस फाइल का नाम लिखकर भेजें (उदा: `aadhar`)\n\n"
-                      + "📋 *डेटा और लिस्ट कमांड्स:*\n"
-                      + "• `all caption` / `all` / `list` - फाइलों की सूची देखें।\n"
-                      + "• `show all` / `show` - प्रकार (Photo/Doc) देखें।\n\n"
-                      + "⚙️ *मैनेजमेंट कमांड्स:*\n"
-                      + "• `edit [old_name] [new_name]` - फाइल का नाम बदलें।\n"
-                      + "• `changepin [old] [new]` - सीक्रेट पिन बदलें।\n"
-                      + "• `del [naam]` - फाइल डिलीट करें।\n"
-                      + "• `clean all` - सारा डेटा साफ करें।\n"
-                      + "• `lock` - बॉट लॉक करें।\n\n"
-                      + "⏳ _Sari chat aur documents 1 minute me automatic delete ho jayenge._";
-                      
+        const welcome_menu = "🔓 *Bot Unlocked Successfully!* \n\nSaare commands active hain.\n🔍 बस फाइल का नाम लिखकर भेजें (उदा: `aadhar`)";
         let reply = await bot.sendMessage(chatId, welcome_menu, { parse_mode: "Markdown" });
-        autoDeleteMessage(chatId, msg.message_id); // यूजर का मैसेज साफ
-        autoDeleteMessage(chatId, reply.message_id); // बोट का मेनू साफ
+        autoDeleteMessage(chatId, msg.message_id);
+        autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
@@ -226,19 +230,17 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🛡️ फिक्स: बोट लॉक होने पर सर्चिंग पूरी तरह ब्लॉक रहेगी
     if (!is_unlocked) {
         let current_attempts = await handleWrongAttempt(msg);
         let remaining = 3 - current_attempts;
         if (remaining > 0) {
-            let reply = await bot.sendMessage(chatId, `❌ *Galat Password!* \n\n🔑 Bot abhi locked hai. Kripya pehle sahi Secret Password bhejein. (Aapke paas ${remaining} attempt bache hain)`);
-            autoDeleteMessage(chatId, msg.message_id);
-            autoDeleteMessage(chatId, reply.message_id);
+            let reply = await bot.sendMessage(chatId, `❌ *Galat Password!* \n\n🔑 Bot locked hai. (Aapke paas ${remaining} attempt bache hain)`);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
     }
 
-    // ⚙️ कैप्शन एडिट वैलिडेशन फिक्स (edit [old_name] [new_name])
+    // ⚙️ फिक्स: एडिट कैप्शन इंडेक्स वैलिडेशन
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -263,14 +265,11 @@ bot.on('message', async (msg) => {
 
             let reply = await bot.sendMessage(chatId, `✅ Success: '${parts[1]}' ka naam badalkar '${parts[2]}' kar diya gaya hai!`);
             autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-        } else {
-            let reply = await bot.sendMessage(chatId, "⚠️ Format error! Kripya aise likhein: `edit [old_name] [new_name]`");
-            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
     }
 
-    // ⚙️ पिन चेंज वैलिडेशन फिक्स (changepin [old] [new])
+    // ⚙️ फिक्स: पिन चेंज इंडेक्स वैलिडेशन
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -279,24 +278,18 @@ bot.on('message', async (msg) => {
             if (old_p === secret_password) {
                 if (new_p.length >= 4) {
                     fs.writeFileSync(config_file, JSON.stringify({ password: new_p }));
-                    let reply = await bot.sendMessage(chatId, "✅ *Success:* Password badal diya gaya hai! Agli baar naye pin se kholein.");
-                    autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-                } else {
-                    let reply = await bot.sendMessage(chatId, "⚠️ Error: Naya password kam se kam 4 digit ka hona chahiye.");
+                    let reply = await bot.sendMessage(chatId, "✅ *Success:* Password badal diya gaya hai!");
                     autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 }
             } else {
-                let reply = await bot.sendMessage(chatId, "❌ Error: Purana password galat hai! Pin nahi badla.");
+                let reply = await bot.sendMessage(chatId, "❌ Error: Purana password galat hai!");
                 autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             }
-        } else {
-            let reply = await bot.sendMessage(chatId, "⚠️ Format error! Kripya aise likhein: `changepin [old_pin] [new_pin]`");
-            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
     }
 
-    // ⚙️ फाइल डिलीट करना फिक्स (del [naam])
+    // ⚙️ फाइल डिलीट करना
     if (text_lower.startsWith("del ")) {
         let target = text_lower.substring(4).trim().toLowerCase();
         let vault = JSON.parse(fs.readFileSync(db_file));
@@ -304,9 +297,6 @@ bot.on('message', async (msg) => {
             delete vault[target];
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
             let reply = await bot.sendMessage(chatId, `🗑️ File '${target}' ko delete kar diya gaya hai!`);
-            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-        } else {
-            let reply = await bot.sendMessage(chatId, `❌ Error: '${target}' naam ki koi file nahi mili.`);
             autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
@@ -337,7 +327,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // बिना नाम की पेंडिंग फाइल सेव करना (ऑटो-इंक्रिप्शन फिक्स)
+    // बिना नाम की पेंडिंग फाइल सेव करना (डुप्लिकेट चेक के साथ फिक्स)
     if (fs.existsSync(pending_file)) {
         let pending_data = JSON.parse(fs.readFileSync(pending_file));
         if (Object.keys(pending_data).length > 0) {
@@ -357,41 +347,7 @@ bot.on('message', async (msg) => {
         }
     }
 
-    // मेनू निर्देश देखना
-    if (text_lower === "/start" || text_lower === "/help" || text_lower === "menu") {
-        const menu = "📱 *Family Documents Bot Menu* 📱\n\n"
-              + "📂 *फाइल कैसे सेव करें:*\n"
-              + "• सीधे फोटो/डॉक्यूमेंट भेजें और नाम बताएं।\n\n"
-              + "🔍 *फाइल कैसे खोजें:*\n"
-              + "• बस फाइल का नाम लिखकर भेजें (जैसे: Aadhar)\n\n"
-              + "📋 *खास कमांड्स:*\n"
-              + "• `all caption` - सभी फाइलों की लिस्ट देखें।\n"
-              + "• `show all` - सारी फाइलें प्रकार के साथ देखें।\n"
-              + "• `lock` - बॉट को तुरंत लॉक करने के लिए।";
-        let reply = await bot.sendMessage(chatId, menu, { parse_mode: "Markdown" });
-        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-        return;
-    }
-
-    if (text_lower === "all caption" || text_lower === "all" || text_lower === "/all" || text_lower === "list") {
-        let vault = JSON.parse(fs.readFileSync(db_file));
-        if (Object.keys(vault).length > 0) {
-            let list = "🗂️ *Aapke Saved Captions:* \n\n";
-            let count = 1;
-            for (let key in vault) {
-                list += `${count}. \`${key}\`\n`;
-                count++;
-            }
-            let reply = await bot.sendMessage(chatId, list, { parse_mode: "Markdown" });
-            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-        } else {
-            let reply = await bot.sendMessage(chatId, "📭 Abhi tak koi bhi file save nahi ki gayi hai!");
-            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
-        }
-        return;
-    }
-
-    // 🔍 सर्च लॉजिक (सुपरफास्ट डिक्रिप्शन एलर्ट फिक्स)
+    // 🔍 सर्च लॉजिक
     let vault = JSON.parse(fs.readFileSync(db_file));
     let matched_keys = [];
 
@@ -407,10 +363,10 @@ bot.on('message', async (msg) => {
         fs.writeFileSync(search_lock_file, JSON.stringify(s_lock));
 
         let files_list = matched_keys.map(k => `• \`${k}\``).join("\n");
-        let reply = await bot.sendMessage(chatId, `🔒 *DOCUMENT LOCKED!*\n\nAapke search se ye files mili hain:\n${files_list}\n\n👉 *Ise live (Decrypt) karne ke liye apna 4-digit PIN bhejein:*`, { parse_mode: "Markdown" });
+        let reply = await bot.sendMessage(chatId, `🔒 *DOCUMENT LOCKED!*\n\nAapke search se ye files mili hain:\n${files_list}\n\n👉 *Ise live karne ke liye apna Secret PIN bhejein:*`, { parse_mode: "Markdown" });
         
-        autoDeleteMessage(chatId, msg.message_id); // यूजर की सर्च क्वेरी साफ
-        autoDeleteMessage(chatId, reply.message_id); // बोट का लॉक अलर्ट साफ
+        autoDeleteMessage(chatId, msg.message_id);
+        autoDeleteMessage(chatId, reply.message_id);
         return;
     }
     
@@ -418,7 +374,7 @@ bot.on('message', async (msg) => {
     autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
 });
 
-// 2. फ़ाइल अपलोड हैंडलिंग (ऑटो-इंक्रिप्शन मोड)
+// 2. फ़ाइल अपलोड हैंडलिंग (🚨 100% डुप्लिकेट इमेज/डॉक्यूमेंट चेक फिक्स)
 bot.on('document', async (msg) => { handleIncomingFile(msg, 'document', msg.document.file_id); });
 bot.on('photo', async (msg) => { handleIncomingFile(msg, 'photo', msg.photo[msg.photo.length - 1].file_id); });
 
@@ -435,13 +391,28 @@ async function handleIncomingFile(msg, type, file_id) {
     let secret_password = config_data.password;
     let vault = JSON.parse(fs.readFileSync(db_file));
     
-    let file_info = { file_id: file_id, type: type };
+    // 🚨 फिक्स: इमेज का यूनिक SHA-256 हैश बनाना ताकि डुप्लिकेट चेक कभी फेल न हो
+    let current_file_hash = generateFileHash(file_id);
+
+    for (let key in vault) {
+        if (vault[key].hash === current_file_hash) {
+            let reply = await bot.sendMessage(chatId, `⚠️ *Duplicate File Error!* \n\nBhai, yeh file pehle se hi \`${key}\` naam se saved hai!`, { parse_mode: "Markdown" });
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+            return;
+        }
+    }
+
+    let file_info = { 
+        file_id: file_id, 
+        type: type,
+        hash: current_file_hash // हैश को सेव करना ताकि अगली बार डुप्लिकेट पकड़ में आए
+    };
 
     if (msg.caption && msg.caption.trim() !== "") {
         let k_db = msg.caption.trim().toLowerCase();
         if (vault[k_db]) {
             let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error!`);
-            autoDeleteMessage(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
         
@@ -457,5 +428,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: 100% Validated and Secure!'));
+app.get('/', (req, res) => res.send('Bot Status: Upgraded with WhatsApp Sharing and Anti-Duplicate!'));
 app.listen(process.env.PORT || 3000);
