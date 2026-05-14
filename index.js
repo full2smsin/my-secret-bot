@@ -11,10 +11,10 @@ const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
 const session_timeout = 300000; // 5 मिनट
 
-// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स डालें)
-const meta_access_token = "EAAHsYeLLc28BRKkwr4kby90BViTZB5z7LSIZCrOmQHxfBFvTFWHBX3OVOQqWx9k9zXkdlvlm76SXLVA5c2NMkC9oOYZCj6OgdNar1VCUpniZB2jqUvq2w5UpB8LDAzEZCIZBGsZC09OesPlCIXQhZCkG7Rv49RK0mCzZB9YGX1aGS9iKQnJaYz4JZB1B6OGl39liEPZAAZDZD"; // 👈 अपना मेटा टोकन यहाँ डालें
+// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स भरें)
+const meta_access_token = "EAAHsYeLLc28BRKkwr4kby90BViTZB5z7LSIZCrOmQHxfBFvTFWHBX3OVOQqWx9k9zXkdlvlm76SXLVA5c2NMkC9oOYZCj6OgdNar1VCUpniZB2jqUvq2w5UpB8LDAzEZCIZBGsZC09OesPlCIXQhZCkG7Rv49RK0mCzZB9YGX1aGS9iKQnJaYz4JZB1B6OGl39liEPZAAZDZD"; // 👈 अपना स्थायी टोकन यहाँ डालें
 const meta_phone_number_id = "102380389232052";   // 👈 अपनी फोन नंबर आईडी यहाँ डालें
-const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // फिक्स किया हुआ आपका रेंडर यूआरएल
+const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -136,14 +136,15 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 मेटा क्लाउड एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का बैकएंड फंक्शन
+// 🟢 मेटा क्लाउड एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
 async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         const metaUrl = `facebook.com{meta_phone_number_id}/messages`;
         
-        // रेंडर एंडपॉइंट से फाइल डाउनलोड करने का सीधा पब्लिक यूआरएल बनाना
-        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}`;
+        // फिक्स: एक्सटेंशन जोड़कर पब्लिक डाउनलोड लिंक बनाना ताकि मेटा एपीआई ब्लॉक न करे
+        const ext = type === "photo" ? "jpg" : "pdf";
+        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}`;
         
         const payload = {
             messaging_product: "whatsapp",
@@ -152,8 +153,8 @@ async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
             type: type === "photo" ? "image" : "document",
             [type === "photo" ? "image" : "document"]: {
                 link: publicDownloadUrl,
-                caption: `🎯 Document: ${fileName}`,
-                filename: `${fileName}${type === "photo" ? ".jpg" : ".pdf"}`
+                caption: `🎯 Vault Document: ${fileName}`,
+                filename: `${fileName}.${ext}`
             }
         };
 
@@ -217,7 +218,7 @@ bot.on('message', async (msg) => {
             }
             autoDeleteMessage(chatId, status_msg.message_id);
         } else {
-            let reply = await bot.sendMessage(chatId, "⚠️ Galat mobile number format! Kripya country code ke sath sahi number bhejein (उदा: 919876543210).");
+            let reply = await bot.sendMessage(chatId, "⚠️ Galat mobile number format! Kripya country code ke sath sahi number bhejein (जैसे: 919876543210).");
             autoDeleteMessage(chatId, reply.message_id);
         }
         delete w_mode[chatId];
@@ -226,7 +227,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (मेटा एपीआई के साथ)
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -250,7 +251,7 @@ bot.on('message', async (msg) => {
                         w_mode_data[chatId] = { file_id: decrypted_file_id, type: vault[key].type, key: key };
                         fs.writeFileSync(whatsapp_mode_file, JSON.stringify(w_mode_data));
                         
-                        let ask_msg = await bot.sendMessage(chatId, `📲 *WhatsApp Transfer Mode Active!*\n\nBhai, ye file kis WhatsApp number par bhejein? \n\n👉 Kripya country code ke sath mobile number type karke bhejein (उदा: \`919876543210\`)`);
+                        let ask_msg = await bot.sendMessage(chatId, `📲 *WhatsApp Transfer Mode Active!*\n\nBhai, ye file kis WhatsApp number par bhejein? \n\n👉 Kripya country code ke sath mobile number type karke bhejein (जैसे: \`919876543210\`)`);
                         autoDeleteMessage(chatId, ask_msg.message_id);
                     }
                 }
@@ -488,7 +489,7 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-// 🟢 रेंडर सर्वर एंडपॉइंट: व्हाट्सएप सर्वर को डायरेक्ट मीडिया बाइनरी स्ट्रीम फॉरवर्ड करना
+// 🟢 फिक्स्ड रेंडर एंडपॉइंट: व्हाट्सएप के लिए टेलीग्राम की फ़ाइल को लाइव बाइनरी स्ट्रीम में बदलना
 app.get('/download-vault-file', async (req, res) => {
     const fetch = (await import('node-fetch')).default;
     const reqFileId = req.query.file_id;
@@ -515,4 +516,4 @@ app.get('/download-vault-file', async (req, res) => {
 });
 
 app.get('/', (req, res) => res.send('Bot Status: Cloud Meta WhatsApp API Engaged!'));
-app.listen(process.env.PORT || 3000);
+app.listen(process.env.PORT || 10000);
