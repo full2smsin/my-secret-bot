@@ -1,7 +1,7 @@
 const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
-const crypto = require('crypto'); // 🔐 मिलिट्री-ग्रेड इंक्रिप्शन टूल
+const crypto = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -18,13 +18,10 @@ const session_file = 'bot_session.txt';
 const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
-const delete_queue_file = 'delete_queue.json';
 const search_lock_file = 'search_lock.json'; 
 
-// शुरुआती जरूरी फाइलें ऑटो-क्रिएट करना
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
 if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
-if (!fs.existsSync(delete_queue_file)) fs.writeFileSync(delete_queue_file, JSON.stringify([]));
 if (!fs.existsSync(search_lock_file)) fs.writeFileSync(search_lock_file, JSON.stringify({}));
 
 const bot = new NTB(token, { polling: true });
@@ -56,31 +53,14 @@ function decryptData(encryptedText, keyPassword) {
     }
 }
 
-// ⏳ 1 मिनट में मैसेज ऑटो-डिलीट करने की कतार का फंक्शन
-function addMessageToDeleteLog(chatId, msgId) {
-    let queue = JSON.parse(fs.readFileSync(delete_queue_file));
-    queue.push({ chat_id: chatId.toString(), message_id: msgId, delete_at: Date.now() + 60000 });
-    fs.writeFileSync(delete_queue_file, JSON.stringify(queue, null, 2));
+// ⏳ फिक्स: 1 मिनट (60 सेकंड) में मैसेज गायब करने का बिना फाइल वाला जादुई फंक्शन
+function autoDeleteMessage(chatId, msgId) {
+    setTimeout(async () => {
+        try {
+            await bot.deleteMessage(chatId, msgId);
+        } catch (e) { /* मैसेज पहले से डिलीट हो तो एरर न आए */ }
+    }, 60000); // 60000 मिलीसेकंड = 1 मिनट
 }
-
-// ऑटो-डिलीट स्कैनर
-setInterval(async () => {
-    if (!fs.existsSync(delete_queue_file)) return;
-    let queue = JSON.parse(fs.readFileSync(delete_queue_file));
-    let current_time = Date.now();
-    let remaining_queue = [];
-
-    for (let item of queue) {
-        if (current_time >= item.delete_at) {
-            try {
-                await bot.deleteMessage(item.chat_id, item.message_id);
-            } catch (e) { }
-        } else {
-            remaining_queue.push(item);
-        }
-    }
-    fs.writeFileSync(delete_queue_file, JSON.stringify(remaining_queue, null, 2));
-}, 2000);
 
 // 🛡️ टेलीग्राम का मेनू बटन अपडेट करने का डायनामिक फंक्शन
 async function updateBotMenu(status) {
@@ -140,7 +120,7 @@ async function handleWrongAttempt(msg) {
         updateBotMenu("lock"); 
         await bot.sendMessage(msg.chat.id, "🚨 *SYSTEM SECURITY BLOCK!* \n\n3 baar galat password dala gaya hai. Yeh bot ab freeze ho chuka hai!");
     }
-    return attempts; // फिक्स: डॉलर साइन हटा दिया गया है
+    return attempts;
 }
 
 // 1. टेक्स्ट मैसेज या कमांड्स हैंडलिंग
@@ -170,7 +150,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 चेक करें कि क्या यूजर ने लॉक्ड फाइल को खोलने के लिए पिन डाला है
+    // 🔓 डिक्रिप्शन पिन चेक
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId] && text === secret_password) {
         let target_keys = s_lock[chatId];
@@ -179,25 +159,24 @@ bot.on('message', async (msg) => {
         for (let key of target_keys) {
             if (vault[key]) {
                 let decrypted_file_id = decryptData(vault[key].file_id, secret_password);
-                
                 if (decrypted_file_id) {
                     if (vault[key].type === "photo") {
                         let sent = await bot.sendPhoto(chatId, decrypted_file_id, { caption: `🎯 Decrypted Photo: ${key}` });
-                        addMessageToDeleteLog(chatId, sent.message_id);
+                        autoDeleteMessage(chatId, sent.message_id);
                     } else {
                         let sent = await bot.sendDocument(chatId, decrypted_file_id, { caption: `🎯 Decrypted Document: ${key}` });
-                        addMessageToDeleteLog(chatId, sent.message_id);
+                        autoDeleteMessage(chatId, sent.message_id);
                     }
                 }
             }
         }
         delete s_lock[chatId];
         fs.writeFileSync(search_lock_file, JSON.stringify(s_lock));
-        addMessageToDeleteLog(chatId, msg.message_id);
+        autoDeleteMessage(chatId, msg.message_id);
         return;
     }
 
-    // सामान्य पासवर्ड से बॉट अनलॉक करना
+    // पासवर्ड से बॉट अनलॉक करना
     if (text === secret_password) {
         if (fs.existsSync(attempts_file)) { try{fs.unlinkSync(attempts_file);}catch(e){} }
         fs.writeFileSync(session_file, JSON.stringify({ status: 'unlocked', last_time: Date.now() }));
@@ -209,8 +188,8 @@ bot.on('message', async (msg) => {
                       + "• बस फाइल का नाम लिखकर भेजें (उदा: `aadhar`)";
                       
         let reply = await bot.sendMessage(chatId, welcome_menu, { parse_mode: "Markdown" });
-        addMessageToDeleteLog(chatId, msg.message_id);
-        addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id);
+        autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
@@ -218,8 +197,8 @@ bot.on('message', async (msg) => {
         if (fs.existsSync(session_file)) { try{fs.unlinkSync(session_file);}catch(e){} }
         updateBotMenu("lock"); 
         let reply = await bot.sendMessage(chatId, "🔒 *Bot Successfully Locked!* Menu saaf kar diya gaya hai.");
-        addMessageToDeleteLog(chatId, msg.message_id);
-        addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id);
+        autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
@@ -232,7 +211,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ कैप्शन एडिट लॉजिक: edit [old_name] [new_name]
+    // ⚙️ एडिट कैप्शन लॉजिक
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -242,12 +221,12 @@ bot.on('message', async (msg) => {
 
             if (!vault[old_name]) {
                 let reply = await bot.sendMessage(chatId, `❌ Error: '${parts[1]}' naam ki koi file nahi mili.`);
-                addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+                autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
             if (vault[new_name]) {
-                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! '${parts[2]}' naam pehle se use ho raha hai.`);
-                addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error!`);
+                autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
 
@@ -255,13 +234,13 @@ bot.on('message', async (msg) => {
             delete vault[old_name];
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
 
-            let reply = await bot.sendMessage(chatId, `✅ Success: '${parts[1]}' ka naam badalkar '${parts[2]}' kar diya gaya hai!`);
-            addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            let reply = await bot.sendMessage(chatId, `✅ Success: Name badal diya gaya hai!`);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
     }
 
-    // ⚙️ पिन चेंज कमांड: changepin [old] [new]
+    // ⚙️ पिन चेंज कमांड
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -270,14 +249,14 @@ bot.on('message', async (msg) => {
                 if (new_p.length >= 4) {
                     fs.writeFileSync(config_file, JSON.stringify({ password: new_p }));
                     let reply = await bot.sendMessage(chatId, "✅ *Success:* Password badal diya gaya hai!");
-                    addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+                    autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 }
             }
         }
         return;
     }
 
-    // ⚙️ फाइल डिलीट करना: del [naam]
+    // ⚙️ फाइल डिलीट करना
     if (text_lower.startsWith("del ")) {
         let target = text_lower.substring(4).trim().toLowerCase();
         let vault = JSON.parse(fs.readFileSync(db_file));
@@ -285,7 +264,7 @@ bot.on('message', async (msg) => {
             delete vault[target];
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
             let reply = await bot.sendMessage(chatId, `🗑️ File '${target}' ko delete kar diya gaya hai!`);
-            addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
     }
@@ -293,7 +272,7 @@ bot.on('message', async (msg) => {
     if (text_lower === "clean all" || text_lower === "/cleanall") {
         fs.writeFileSync(db_file, JSON.stringify({}));
         let reply = await bot.sendMessage(chatId, "🗑️ *Fresh Start!* Saara purana data delete ho gaya hai.");
-        addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
@@ -301,7 +280,7 @@ bot.on('message', async (msg) => {
         let vault = JSON.parse(fs.readFileSync(db_file));
         if (Object.keys(vault).length === 0) {
             let reply = await bot.sendMessage(chatId, "📭 Abhi tak koi bhi file save nahi ki gayi hai!");
-            addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
         let list_all = "🖼️ *Sari Files (Encrypted Mod):* \n\n";
@@ -311,29 +290,62 @@ bot.on('message', async (msg) => {
             count++;
         }
         let reply = await bot.sendMessage(chatId, list_all, { parse_mode: "Markdown" });
-        addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
-    // बिना नाम की पेंडिंग फाइल को नाम देकर सेव करना (ऑटो-इंक्रिप्शन के साथ)
+    // बिना नाम की पेंडिंग फाइल सेव करना
     if (fs.existsSync(pending_file)) {
         let pending_data = JSON.parse(fs.readFileSync(pending_file));
         if (Object.keys(pending_data).length > 0) {
             let vault = JSON.parse(fs.readFileSync(db_file));
             if (vault[text_lower]) {
                 let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! Doosra naam batao.`);
-                addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+                autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
             pending_data.file_id = encryptData(pending_data.file_id, secret_password);
-            
             vault[text_lower] = pending_data;
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
             try{fs.unlinkSync(pending_file);}catch(e){}
             let reply = await bot.sendMessage(chatId, "🔒 Saved and Encrypted successfully as: " + text);
-            addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
+    }
+
+    // मेनू निर्देश देखना
+    if (text_lower === "/start" || text_lower === "/help" || text_lower === "menu") {
+        const menu = "📱 *Family Documents Bot Menu* 📱\n\n"
+              + "📂 *फाइल कैसे सेव करें:*\n"
+              + "• सीधे फोटो/डॉक्यूमेंट भेजें और नाम बताएं।\n\n"
+              + "🔍 *फाइल कैसे खोजें:*\n"
+              + "• बस फाइल का नाम लिखकर भेजें (जैसे: Aadhar)\n\n"
+              + "📋 *खास कमांड्स:*\n"
+              + "• `all caption` - सभी फाइलों की लिस्ट देखें।\n"
+              + "• `show all` - सारी फाइलें प्रकार के साथ देखें।\n"
+              + "• `lock` - बॉट को तुरंत लॉक करने के लिए।";
+        let reply = await bot.sendMessage(chatId, menu, { parse_mode: "Markdown" });
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+        return;
+    }
+
+    if (text_lower === "all caption" || text_lower === "all" || text_lower === "/all" || text_lower === "list") {
+        let vault = JSON.parse(fs.readFileSync(db_file));
+        if (Object.keys(vault).length > 0) {
+            let list = "🗂️ *Aapke Saved Captions:* \n\n";
+            let count = 1;
+            for (let key in vault) {
+                list += `${count}. \`${key}\`\n`;
+                count++;
+            }
+            let reply = await bot.sendMessage(chatId, list, { parse_mode: "Markdown" });
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+        } else {
+            let reply = await bot.sendMessage(chatId, "📭 Abhi tak koi bhi file save nahi ki gayi hai!");
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+        }
+        return;
     }
 
     // 🔍 सर्च लॉजिक
@@ -354,16 +366,16 @@ bot.on('message', async (msg) => {
         let files_list = matched_keys.map(k => `• \`${k}\``).join("\n");
         let reply = await bot.sendMessage(chatId, `🔒 *DOCUMENT LOCKED!*\n\nAapke search se ye files mili hain:\n${files_list}\n\n👉 *Ise live (Decrypt) karne ke liye apna 4-digit PIN bhejein:*`, { parse_mode: "Markdown" });
         
-        addMessageToDeleteLog(chatId, msg.message_id);
-        addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id);
+        autoDeleteMessage(chatId, reply.message_id);
         return;
     }
     
     let reply = await bot.sendMessage(chatId, `🔍 Maaf kijiyega, '${text}' se koi document nahi mila!`);
-    addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+    autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
 });
 
-// 2. फ़ाइल अपलोड हैंडलिंग (ऑटो-इंक्रिप्शन मोड)
+// 2. फ़ाइल अपलोड हैंडलिंग
 bot.on('document', async (msg) => { handleIncomingFile(msg, 'document', msg.document.file_id); });
 bot.on('photo', async (msg) => { handleIncomingFile(msg, 'photo', msg.photo[msg.photo.length - 1].file_id); });
 
@@ -386,20 +398,19 @@ async function handleIncomingFile(msg, type, file_id) {
         let k_db = msg.caption.trim().toLowerCase();
         if (vault[k_db]) {
             let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error!`);
-            addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+            autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
         
         file_info.file_id = encryptData(file_id, secret_password);
-        
         vault[k_db] = file_info;
         fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
         let reply = await bot.sendMessage(chatId, "🔒 Saved and Encrypted: " + msg.caption);
-        addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
     } else {
         fs.writeFileSync(pending_file, JSON.stringify(file_info));
         let reply = await bot.sendMessage(chatId, "❓ Bhai, ye kiska document hai? Naam batao.");
-        addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
     }
 }
 
