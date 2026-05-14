@@ -19,7 +19,7 @@ const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
 const delete_queue_file = 'delete_queue.json';
-const search_lock_file = 'search_lock.json'; // अस्थायी रूप से सर्च की गई फाइल को होल्ड करने के लिए
+const search_lock_file = 'search_lock.json'; 
 
 // शुरुआती जरूरी फाइलें ऑटो-क्रिएट करना
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
@@ -52,7 +52,7 @@ function decryptData(encryptedText, keyPassword) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (e) {
-        return null; // अगर गलत पिन से डिक्रिप्ट करने की कोशिश हो
+        return null; 
     }
 }
 
@@ -74,7 +74,7 @@ setInterval(async () => {
         if (current_time >= item.delete_at) {
             try {
                 await bot.deleteMessage(item.chat_id, item.message_id);
-            } catch (e) {}
+            } catch (e) { }
         } else {
             remaining_queue.push(item);
         }
@@ -140,7 +140,7 @@ async function handleWrongAttempt(msg) {
         updateBotMenu("lock"); 
         await bot.sendMessage(msg.chat.id, "🚨 *SYSTEM SECURITY BLOCK!* \n\n3 baar galat password dala gaya hai. Yeh bot ab freeze ho chuka hai!");
     }
-    return attempts;
+    return attempts; // फिक्स: डॉलर साइन हटा दिया गया है
 }
 
 // 1. टेक्स्ट मैसेज या कमांड्स हैंडलिंग
@@ -178,7 +178,6 @@ bot.on('message', async (msg) => {
         
         for (let key of target_keys) {
             if (vault[key]) {
-                // 🔐 फ़ाइल ID को सीक्रेट पासवर्ड से डिक्रिप्ट करना
                 let decrypted_file_id = decryptData(vault[key].file_id, secret_password);
                 
                 if (decrypted_file_id) {
@@ -326,7 +325,6 @@ bot.on('message', async (msg) => {
                 addMessageToDeleteLog(chatId, msg.message_id); addMessageToDeleteLog(chatId, reply.message_id);
                 return;
             }
-            // 🔐 सेव करते समय फ़ाइल ID को पासवर्ड से एन्क्रिप्ट करना
             pending_data.file_id = encryptData(pending_data.file_id, secret_password);
             
             vault[text_lower] = pending_data;
@@ -338,7 +336,7 @@ bot.on('message', async (msg) => {
         }
     }
 
-    // 🔍 नया सर्च लॉजिक: फाइल मिलने पर उसे लॉक दिखाएगा और पिन मांगेगा
+    // 🔍 सर्च लॉजिक
     let vault = JSON.parse(fs.readFileSync(db_file));
     let matched_keys = [];
 
@@ -392,7 +390,6 @@ async function handleIncomingFile(msg, type, file_id) {
             return;
         }
         
-        // 🔐 सीधे अपलोड करते समय ही फ़ाइल ID को एन्क्रिप्ट करना
         file_info.file_id = encryptData(file_id, secret_password);
         
         vault[k_db] = file_info;
