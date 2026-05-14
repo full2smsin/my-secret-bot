@@ -7,7 +7,7 @@ app.use(express.json());
 
 // 🔑 कॉन्फ़िगरेशन सेटिंग्स
 const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
-const my_chat_id = 5429869370;
+const my_chat_id = "5429869370"; // फिक्स: इसे स्ट्रिंग में बदला गया है ताकि मैचिंग एरर न आए
 const session_timeout = 300000; // 5 मिनट (मिलीसेकंड में)
 
 const db_file = 'my_secure_vault.json';
@@ -29,7 +29,7 @@ const bot = new NTB(token, { polling: true });
 // ⏳ 1 मिनट में मैसेज ऑटो-डिलीट करने की कतार का फंक्शन
 function addMessageToDeleteLog(chatId, msgId) {
     let queue = JSON.parse(fs.readFileSync(delete_queue_file));
-    queue.push({ chat_id: chatId, message_id: msgId, delete_at: Date.now() + 60000 });
+    queue.push({ chat_id: chatId.toString(), message_id: msgId, delete_at: Date.now() + 60000 });
     fs.writeFileSync(delete_queue_file, JSON.stringify(queue, null, 2));
 }
 
@@ -93,7 +93,7 @@ async function handleWrongAttempt(msg) {
     let from = msg.from;
     let intruder_name = (from.first_name || '') + ' ' + (from.last_name || '');
     let intruder_username = from.username || 'No Username';
-    let intruder_id = from.id || 'Unknown ID';
+    let intruder_id = from.id ? from.id.toString() : 'Unknown ID';
     
     let log_entry = `⚠️ *Intruder Alert!* \n`
                + `• Name: ${intruder_name}\n`
@@ -112,12 +112,12 @@ async function handleWrongAttempt(msg) {
         updateBotMenu("lock"); 
         await bot.sendMessage(msg.chat.id, "🚨 *SYSTEM SECURITY BLOCK!* \n\n3 baar galat password dala gaya hai. Yeh bot ab freeze ho chuka hai!");
     }
-    return $attempts;
+    return attempts;
 }
 
 // 1. टेक्स्ट मैसेज या कमांड्स हैंडलिंग
 bot.on('message', async (msg) => {
-    const chatId = msg.chat.id;
+    const chatId = msg.chat.id.toString(); // फिक्स: चैट आईडी को हमेशा स्ट्रिंग में बदलें ताकि मैच हो सके
     if (chatId !== my_chat_id) return;
 
     const text = msg.text ? msg.text.trim() : "";
@@ -407,7 +407,7 @@ bot.on('document', async (msg) => { handleIncomingFile(msg, 'document', msg.docu
 bot.on('photo', async (msg) => { handleIncomingFile(msg, 'photo', msg.photo[msg.photo.length - 1].file_id); });
 
 async function handleIncomingFile(msg, type, file_id) {
-    const chatId = msg.chat.id;
+    const chatId = msg.chat.id.toString();
     if (chatId !== my_chat_id) return;
 
     if (!checkSession()) {
