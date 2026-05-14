@@ -11,6 +11,11 @@ const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
 const session_timeout = 300000; // 5 मिनट
 
+// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स डालें)
+const meta_access_token = "EAAHsYeLLc28BRKkwr4kby90BViTZB5z7LSIZCrOmQHxfBFvTFWHBX3OVOQqWx9k9zXkdlvlm76SXLVA5c2NMkC9oOYZCj6OgdNar1VCUpniZB2jqUvq2w5UpB8LDAzEZCIZBGsZC09OesPlCIXQhZCkG7Rv49RK0mCzZB9YGX1aGS9iKQnJaYz4JZB1B6OGl39liEPZAAZDZD"; // 👈 अपना मेटा टोकन यहाँ डालें
+const meta_phone_number_id = "102380389232052";   // 👈 अपनी फोन नंबर आईडी यहाँ डालें
+const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // फिक्स किया हुआ आपका रेंडर यूआरएल
+
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
 const log_file = 'security_alerts.log';
@@ -19,10 +24,12 @@ const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
 const search_lock_file = 'search_lock.json'; 
+const whatsapp_mode_file = 'whatsapp_mode.json'; 
 
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
 if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
 if (!fs.existsSync(search_lock_file)) fs.writeFileSync(search_lock_file, JSON.stringify({}));
+if (!fs.existsSync(whatsapp_mode_file)) fs.writeFileSync(whatsapp_mode_file, JSON.stringify({}));
 
 const bot = new NTB(token, { polling: true });
 
@@ -129,6 +136,42 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
+// 🟢 मेटा क्लाउड एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का बैकएंड फंक्शन
+async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const metaUrl = `facebook.com{meta_phone_number_id}/messages`;
+        
+        // रेंडर एंडपॉइंट से फाइल डाउनलोड करने का सीधा पब्लिक यूआरएल बनाना
+        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}`;
+        
+        const payload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: targetMobile,
+            type: type === "photo" ? "image" : "document",
+            [type === "photo" ? "image" : "document"]: {
+                link: publicDownloadUrl,
+                caption: `🎯 Document: ${fileName}`,
+                filename: `${fileName}${type === "photo" ? ".jpg" : ".pdf"}`
+            }
+        };
+
+        const response = await fetch(metaUrl, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${meta_access_token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        return response.ok;
+    } catch (e) {
+        return false;
+    }
+}
+
 // 1. टेक्स्ट मैसेज या कमांड्स हैंडलिंग
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id.toString();
@@ -156,7 +199,34 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (बटन पूरी तरह हटा दिए गए हैं)
+    // 🟢 चेक करें कि क्या यूजर व्हाट्सएप सेंडिंग मोड में नंबर टाइप कर रहा है
+    let w_mode = JSON.parse(fs.readFileSync(whatsapp_mode_file));
+    if (w_mode[chatId]) {
+        let active_whatsapp_job = w_mode[chatId];
+        let cleaned_number = text.replace(/[^0-9]/g, '');
+        
+        if (cleaned_number.length >= 10) {
+            let status_msg = await bot.sendMessage(chatId, `⏳ Meta API se WhatsApp number *${cleaned_number}* par file bheji ja rahi hai...`, { parse_mode: "Markdown" });
+            
+            let isSent = await sendToWhatsAppMeta(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
+            
+            if (isSent) {
+                await bot.sendMessage(chatId, `✅ *Success!* File Meta WhatsApp API ke jariye number *${cleaned_number}* par successfully transfer ho gayi hai.`);
+            } else {
+                await bot.sendMessage(chatId, `❌ *Meta API Error!* WhatsApp par file nahi bheji ja saki. Kripya apna Token ya Phone ID check karein.`);
+            }
+            autoDeleteMessage(chatId, status_msg.message_id);
+        } else {
+            let reply = await bot.sendMessage(chatId, "⚠️ Galat mobile number format! Kripya country code ke sath sahi number bhejein (उदा: 919876543210).");
+            autoDeleteMessage(chatId, reply.message_id);
+        }
+        delete w_mode[chatId];
+        fs.writeFileSync(whatsapp_mode_file, JSON.stringify(w_mode));
+        autoDeleteMessage(chatId, msg.message_id);
+        return;
+    }
+
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -174,6 +244,14 @@ bot.on('message', async (msg) => {
                             let sent = await bot.sendDocument(chatId, decrypted_file_id, { caption: `🎯 Decrypted: ${key}` });
                             autoDeleteMessage(chatId, sent.message_id);
                         }
+                        
+                        // व्हाट्सएप सेंडिंग के लिए कतार एक्टिवेट करना
+                        let w_mode_data = JSON.parse(fs.readFileSync(whatsapp_mode_file));
+                        w_mode_data[chatId] = { file_id: decrypted_file_id, type: vault[key].type, key: key };
+                        fs.writeFileSync(whatsapp_mode_file, JSON.stringify(w_mode_data));
+                        
+                        let ask_msg = await bot.sendMessage(chatId, `📲 *WhatsApp Transfer Mode Active!*\n\nBhai, ye file kis WhatsApp number par bhejein? \n\n👉 Kripya country code ke sath mobile number type karke bhejein (उदा: \`919876543210\`)`);
+                        autoDeleteMessage(chatId, ask_msg.message_id);
                     }
                 }
             }
@@ -223,7 +301,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ एडिट कैप्शन लॉजिक
+    // ⚙️ कैप्शन एडिट लॉजिक
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -232,12 +310,12 @@ bot.on('message', async (msg) => {
             let vault = JSON.parse(fs.readFileSync(db_file));
 
             if (!vault[old_name]) {
-                let reply = await bot.sendMessage(chatId, `❌ Error: '${parts[1]}' naam ki koi file nahi mili.`);
+                let reply = await bot.sendMessage(chatId, `❌ Error: '${old_name}' naam ki koi file nahi mili.`);
                 autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
             if (vault[new_name]) {
-                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! '${parts[2]}' naam pehle se use ho raha hai.`);
+                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! '${new_name}' naam pehle se use ho raha hai.`);
                 autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
@@ -246,7 +324,7 @@ bot.on('message', async (msg) => {
             delete vault[old_name];
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
 
-            let reply = await bot.sendMessage(chatId, `✅ Success: '${parts[1]}' ka naam badalkar '${parts[2]}' kar diya gaya hai!`);
+            let reply = await bot.sendMessage(chatId, `✅ Success: Name badal diya gaya hai!`);
             autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
         }
         return;
@@ -410,5 +488,31 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Cleaned and 100% Validated!'));
+// 🟢 रेंडर सर्वर एंडपॉइंट: व्हाट्सएप सर्वर को डायरेक्ट मीडिया बाइनरी स्ट्रीम फॉरवर्ड करना
+app.get('/download-vault-file', async (req, res) => {
+    const fetch = (await import('node-fetch')).default;
+    const reqFileId = req.query.file_id;
+    if (!reqFileId) return res.status(400).send('Missing file id');
+
+    try {
+        const getFileUrl = `telegram.org{token}/getFile?file_id=${reqFileId}`;
+        const fileRes = await fetch(getFileUrl);
+        const fileJson = await fileRes.json();
+        
+        if (fileJson.ok) {
+            const filePath = fileJson.result.file_path;
+            const downloadUrl = `telegram.org{token}/${filePath}`;
+            
+            const mediaRes = await fetch(downloadUrl);
+            res.setHeader('Content-Type', mediaRes.headers.get('content-type') || 'application/octet-stream');
+            mediaRes.body.pipe(res);
+        } else {
+            res.status(404).send('Telegram file error');
+        }
+    } catch (e) {
+        res.status(500).send('Server Error');
+    }
+});
+
+app.get('/', (req, res) => res.send('Bot Status: Cloud Meta WhatsApp API Engaged!'));
 app.listen(process.env.PORT || 3000);
