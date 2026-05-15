@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const FormData = require('form-data');
 
-// Replace with your actual bot token
+//Replace with your actual bot token
 const token = '7541620242:AAE65mYvP9jGAs4u8EksB_mS4Xp-L5O2oVs';
 
 // Initialize bot with polling
