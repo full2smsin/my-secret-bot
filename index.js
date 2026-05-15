@@ -12,7 +12,7 @@ const my_chat_id = "5429869370";
 const session_timeout = 300000; //5 मिनट
 
 // 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स
-const meta_access_token = "EAAucHkxZCs0oBRaUjq2iu8YHiFm4PT6G1ZBCYZA6Lg62TfcdZAfTamYEECZC6rZBvsukmYqkJSdjVJNUsRGqXAQLwaUWcZCt6IMixB3kqoZARicVCpwIuF6vvt9ZApD2wxTQX38lmvmu53NkjZAWZCj6JStrVw7Ft1p0nQkrr0jCcfYlQok3yo3uAlwiCU9lctWswIjrIQzeAgwP5xLsQwY04YFphAHsMZCZA2KJcxyhHtcmihQ1lnD2UuxGsgtLCJpfzyXByq5y482oj1Q3oc5eZApZBwH"; 
+const meta_access_token = "EAAucHkxZCs0oBRYP1Un3OQhjFrCScGxvsQOUcJ1uD1FYbd6wV6RZCz3d4xgmi2ZAzQRg77SCWjbXCkkC42eXjMggtogXbyXO3Iyn83N7qlIMs4fkQEZBBA5HfRScbCOpT8Lby9oulf0yMaTzg2i0heCNeR0N6iALDGZCnZA72e9YmXcFIpV81dZCgoMsi2n"; 
 const meta_phone_number_id = "102380389232052";   
 const render_app_url = "https://onrender.com"; // आपकी रेंडर ऐप का लिंक
 
