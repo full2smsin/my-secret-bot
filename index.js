@@ -7,7 +7,7 @@ const FormData = require('form-data'); // Green API को मल्टीपा
 // Replace with your actual bot token (आपका मूल टेलीग्राम क्रेडेंशियल)
 const token = '7541620242:AAE65mYvP9jGAs4u8EksB_mS4Xp-L5O2oVs';
 
-// Initialize bot with polling
+//Initialize bot with polling
 const bot = new TelegramBot(token, { polling: true });
 
 // Encryption configuration (आपका मूल AES-256-CBC एन्क्रिप्शन लॉजिक)
