@@ -9,7 +9,7 @@ app.use(express.json());
 // 🔑 कॉन्फ़िगरेशन सेटिंग्स
 const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
-const session_timeout = 300000; // 5 मिनट
+const session_timeout = 300000; //5 मिनट
 
 // 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स
 const meta_access_token = "EAAucHkxZCs0oBRaUjq2iu8YHiFm4PT6G1ZBCYZA6Lg62TfcdZAfTamYEECZC6rZBvsukmYqkJSdjVJNUsRGqXAQLwaUWcZCt6IMixB3kqoZARicVCpwIuF6vvt9ZApD2wxTQX38lmvmu53NkjZAWZCj6JStrVw7Ft1p0nQkrr0jCcfYlQok3yo3uAlwiCU9lctWswIjrIQzeAgwP5xLsQwY04YFphAHsMZCZA2KJcxyhHtcmihQ1lnD2UuxGsgtLCJpfzyXByq5y482oj1Q3oc5eZApZBwH"; 
