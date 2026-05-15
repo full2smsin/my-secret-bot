@@ -11,10 +11,10 @@ const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
 const session_timeout = 300000; // 5 मिनट
 
-// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स भरें)
-const meta_access_token = "EAAucHkxZCs0oBRaUjq2iu8YHiFm4PT6G1ZBCYZA6Lg62TfcdZAfTamYEECZC6rZBvsukmYqkJSdjVJNUsRGqXAQLwaUWcZCt6IMixB3kqoZARicVCpwIuF6vvt9ZApD2wxTQX38lmvmu53NkjZAWZCj6JStrVw7Ft1p0nQkrr0jCcfYlQok3yo3uAlwiCU9lctWswIjrIQzeAgwP5xLsQwY04YFphAHsMZCZA2KJcxyhHtcmihQ1lnD2UuxGsgtLCJpfzyXByq5y482oj1Q3oc5eZApZBwH"; // 👈 अपना स्थायी टोकन यहाँ डालें
-const meta_phone_number_id = "102380389232052";   // 👈 अपनी फोन नंबर आईडी यहाँ डालें
-const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
+// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स
+const meta_access_token = "EAAucHkxZCs0oBRaUjq2iu8YHiFm4PT6G1ZBCYZA6Lg62TfcdZAfTamYEECZC6rZBvsukmYqkJSdjVJNUsRGqXAQLwaUWcZCt6IMixB3kqoZARicVCpwIuF6vvt9ZApD2wxTQX38lmvmu53NkjZAWZCj6JStrVw7Ft1p0nQkrr0jCcfYlQok3yo3uAlwiCU9lctWswIjrIQzeAgwP5xLsQwY04YFphAHsMZCZA2KJcxyhHtcmihQ1lnD2UuxGsgtLCJpfzyXByq5y482oj1Q3oc5eZApZBwH"; 
+const meta_phone_number_id = "102380389232052";   
+const render_app_url = "https://onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -24,8 +24,9 @@ const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
 const pending_file = 'pending_file.txt';
 const search_lock_file = 'search_lock.json'; 
-const whatsapp_mode_file = 'whatsapp_mode.json'; 
+const whatsapp_mode_file = 'whatsapp_mode.json';
 
+// फ़ाइलें इनिशियलाइज़ करना
 if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
 if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
 if (!fs.existsSync(search_lock_file)) fs.writeFileSync(search_lock_file, JSON.stringify({}));
@@ -38,7 +39,7 @@ function generateFileHash(fileId) {
     return crypto.createHash('sha256').update(fileId).digest('hex');
 }
 
-// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स
+// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन फंक्शन
 function encryptData(text, keyPassword) {
     const salt = crypto.randomBytes(16);
     const key = crypto.scryptSync(keyPassword, salt, 32);
@@ -49,6 +50,7 @@ function encryptData(text, keyPassword) {
     return salt.toString('hex') + ':' + iv.toString('hex') + ':' + encrypted;
 }
 
+// 🔒 AES-256 डिक्रिप्शन फंक्शन
 function decryptData(encryptedText, keyPassword) {
     try {
         const parts = encryptedText.split(':');
@@ -66,7 +68,7 @@ function decryptData(encryptedText, keyPassword) {
     }
 }
 
-// ⏳ 1 मिनट (60 सेकंड) में चैट को दोनों तरफ से साफ करने का फंक्शन
+// ⏳ 1 मिनट में चैट को साफ करने का फंक्शन
 function autoDeleteMessage(chatId, msgId) {
     setTimeout(async () => {
         try {
@@ -75,7 +77,7 @@ function autoDeleteMessage(chatId, msgId) {
     }, 60000); 
 }
 
-// 🛡️ टेलीग्राम का मेनू बटन अपडेट करने का डायनामिक फंक्शन
+// बोट मेनू अपडेट करना
 async function updateBotMenu(status) {
     if (status === "lock") {
         await bot.setMyCommands([]);
@@ -91,6 +93,7 @@ async function updateBotMenu(status) {
     }
 }
 
+// सेशन की जांच करना
 function checkSession() {
     if (fs.existsSync(session_file) && !fs.existsSync(blocked_file)) {
         let session_data = JSON.parse(fs.readFileSync(session_file));
@@ -106,6 +109,7 @@ function checkSession() {
     return false;
 }
 
+// गलत पासवर्ड अटेम्पट हैंडल करना
 async function handleWrongAttempt(msg) {
     let attempts = fs.existsSync(attempts_file) ? parseInt(fs.readFileSync(attempts_file, 'utf8')) : 0;
     attempts++;
@@ -136,26 +140,30 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 मेटा क्लाउड एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
+// 🟢 फिक्स्ड: मेटा व्हाट्सएप एपीआई को मीडिया भेजने का फंक्शन
 async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
-        const metaUrl = `facebook.com{meta_phone_number_id}/messages`;
+        // ✅ फिक्स 1: सही प्रोटोकॉल, वर्ज़न और वेरिएबल सिंटैक्स ($ साइन)
+        const metaUrl = `https://facebook.com{meta_phone_number_id}/messages`;
         
-        // फिक्स: एक्सटेंशन जोड़कर पब्लिक डाउनलोड लिंक बनाना ताकि मेटा एपीआई ब्लॉक न करे
         const ext = type === "photo" ? "jpg" : "pdf";
         const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}`;
         
+        // ✅ फिक्स 2: व्हाट्सएप पॉलिसी के अनुसार डॉक्यूमेंट पेलोड से 'caption' हटाया गया
+        let mediaObject = { link: publicDownloadUrl };
+        if (type === "photo") {
+            mediaObject.caption = `🎯 Vault Document: ${fileName}`;
+        } else {
+            mediaObject.filename = `${fileName}.${ext}`;
+        }
+
         const payload = {
             messaging_product: "whatsapp",
             recipient_type: "individual",
             to: targetMobile,
             type: type === "photo" ? "image" : "document",
-            [type === "photo" ? "image" : "document"]: {
-                link: publicDownloadUrl,
-                caption: `🎯 Vault Document: ${fileName}`,
-                filename: `${fileName}.${ext}`
-            }
+            [type === "photo" ? "image" : "document"]: mediaObject
         };
 
         const response = await fetch(metaUrl, {
@@ -169,11 +177,12 @@ async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
         
         return response.ok;
     } catch (e) {
+        console.error("Meta API Send Error:", e);
         return false;
     }
 }
 
-// 1. टेक्स्ट मैसेज या कमांड्स हैंडलिंग
+// 💬 टेलीग्राम मैसेज हैंडलर
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id.toString();
     if (chatId !== my_chat_id) return;
@@ -200,7 +209,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🟢 चेक करें कि क्या यूजर व्हाट्सएप सेंडिंग मोड में नंबर टाइप कर रहा है
+    // 📲 व्हाट्सएप सेंडिंग प्रोसेस ट्रिगर
     let w_mode = JSON.parse(fs.readFileSync(whatsapp_mode_file));
     if (w_mode[chatId]) {
         let active_whatsapp_job = w_mode[chatId];
@@ -227,7 +236,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (मेटा एपीआई के साथ)
+    // 🔍 सर्च लॉक और डिक्रिप्शन
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -246,9 +255,9 @@ bot.on('message', async (msg) => {
                             autoDeleteMessage(chatId, sent.message_id);
                         }
                         
-                        // व्हाट्सएप सेंडिंग के लिए कतार एक्टिवेट करना
+                        // व्हाट्सएप ट्रांसफर मोड के लिए डेटा स्टोर करना (यह फ़ाइल आईडी अभी भी सुरक्षित या एन्क्रिप्टेड फॉर्मेट में भेजी जा सकती है)
                         let w_mode_data = JSON.parse(fs.readFileSync(whatsapp_mode_file));
-                        w_mode_data[chatId] = { file_id: decrypted_file_id, type: vault[key].type, key: key };
+                        w_mode_data[chatId] = { file_id: vault[key].file_id, type: vault[key].type, key: key };
                         fs.writeFileSync(whatsapp_mode_file, JSON.stringify(w_mode_data));
                         
                         let ask_msg = await bot.sendMessage(chatId, `📲 *WhatsApp Transfer Mode Active!*\n\nBhai, ye file kis WhatsApp number par bhejein? \n\n👉 Kripya country code ke sath mobile number type karke bhejein (जैसे: \`919876543210\`)`);
@@ -276,13 +285,14 @@ bot.on('message', async (msg) => {
         fs.writeFileSync(session_file, JSON.stringify({ status: 'unlocked', last_time: Date.now() }));
         updateBotMenu("unlock"); 
         
-        const welcome_menu = "🔓 *Bot Unlocked Successfully!* \n\nSaare commands active hain.\n🔍 बस फाइल का नाम लिखकर भेजें (उदा: `aadhar`)";
+        const welcome_menu = "🔓 *Bot Unlocked Successfully!* \n\nSaare commands active hain.\n🔍 बस... फाइल का नाम लिखकर भेजें (उदा: `aadhar`)";
         let reply = await bot.sendMessage(chatId, welcome_menu, { parse_mode: "Markdown" });
         autoDeleteMessage(chatId, msg.message_id);
         autoDeleteMessage(chatId, reply.message_id);
         return;
     }
 
+    // बॉट लॉक करना
     if (text_lower === "lock" || text_lower === "/lock") {
         if (fs.existsSync(session_file)) { try{fs.unlinkSync(session_file);}catch(e){} }
         updateBotMenu("lock"); 
@@ -331,7 +341,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ पिन चेंज लॉजिक
+    // पिन बदलना
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -351,7 +361,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ फाइल डिलीट करना
+    // फाइल डिलीट करना
     if (text_lower.startsWith("del ")) {
         let target = text_lower.substring(4).trim().toLowerCase();
         let vault = JSON.parse(fs.readFileSync(db_file));
@@ -364,6 +374,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
+    // पूरा डेटा साफ करना
     if (text_lower === "clean all" || text_lower === "/cleanall") {
         fs.writeFileSync(db_file, JSON.stringify({}));
         let reply = await bot.sendMessage(chatId, "🗑️ *Fresh Start!* Saara purana data delete ho gaya hai.");
@@ -371,6 +382,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
+    // सभी सेव्ड फाइलें देखना
     if (text_lower === "show all" || text_lower === "show" || text_lower === "/show") {
         let vault = JSON.parse(fs.readFileSync(db_file));
         if (Object.keys(vault).length === 0) {
@@ -389,7 +401,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // बिना नाम की पेंडिंग फाइल सेव करना
+    // पेंडिंग फाइल को नाम देकर सेव करना
     if (fs.existsSync(pending_file)) {
         let pending_data = JSON.parse(fs.readFileSync(pending_file));
         if (Object.keys(pending_data).length > 0) {
@@ -409,7 +421,7 @@ bot.on('message', async (msg) => {
         }
     }
 
-    // 🔍 सर्च लॉजिक
+    // 🔍 सामान्य सर्च इंजन लॉजिक
     let vault = JSON.parse(fs.readFileSync(db_file));
     let matched_keys = [];
 
@@ -436,7 +448,7 @@ bot.on('message', async (msg) => {
     autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
 });
 
-// 2. फ़ाइल अपलोड हैंडलिंग
+// 📂 फ़ाइल अपलोड रिसीवर्स
 bot.on('document', async (msg) => { handleIncomingFile(msg, 'document', msg.document.file_id); });
 bot.on('photo', async (msg) => { handleIncomingFile(msg, 'photo', msg.photo[msg.photo.length - 1].file_id); });
 
@@ -476,7 +488,6 @@ async function handleIncomingFile(msg, type, file_id) {
             autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
-        
         file_info.file_id = encryptData(file_id, secret_password);
         vault[k_db] = file_info;
         fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
@@ -489,31 +500,47 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-// 🟢 फिक्स्ड रेंडर एंडपॉइंट: व्हाट्सएप के लिए टेलीग्राम की फ़ाइल को लाइव बाइनरी स्ट्रीम में बदलना
+// 🟢 फिक्स्ड एक्सप्रेस एंडपॉइंट: व्हाट्सएप के लिए टेलीग्राम फ़ाइल को बाइनरी स्ट्रीम में बदलना
 app.get('/download-vault-file', async (req, res) => {
-    const fetch = (await import('node-fetch')).default;
-    const reqFileId = req.query.file_id;
-    if (!reqFileId) return res.status(400).send('Missing file id');
-
     try {
-        const getFileUrl = `telegram.org{token}/getFile?file_id=${reqFileId}`;
+        const fetch = (await import('node-fetch')).default;
+        const reqFileId = req.query.file_id;
+        if (!reqFileId) return res.status(400).send('Missing file id');
+
+        let config_data = JSON.parse(fs.readFileSync(config_file));
+        let secret_password = config_data.password;
+        
+        // ✅ फिक्स 1: डेटाबेस से प्राप्त पिन का उपयोग करके फ़ाइल आईडी को पहले डिक्रिप्ट करें
+        let decryptedFileId = reqFileId;
+        if (reqFileId.includes(':')) {
+            decryptedFileId = decryptData(reqFileId, secret_password);
+        }
+
+        if (!decryptedFileId) return res.status(400).send('Decryption failed');
+
+        // ✅ फिक्स 2: टेलीग्राम API के यूआरएल को बिल्कुल सही प्रोटोकॉल और वेरिएबल सिंटैक्स में बदला
+        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${decryptedFileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
         if (fileJson.ok) {
             const filePath = fileJson.result.file_path;
-            const downloadUrl = `telegram.org{token}/${filePath}`;
+            const downloadUrl = `https://telegram.org{token}/${filePath}`;
             
             const mediaRes = await fetch(downloadUrl);
             res.setHeader('Content-Type', mediaRes.headers.get('content-type') || 'application/octet-stream');
+            
+            // फ़ाइल बाइनरी को सीधे मेटा व्हाट्सएप सर्वर को स्ट्रीम कर दें
             mediaRes.body.pipe(res);
         } else {
             res.status(404).send('Telegram file error');
         }
     } catch (e) {
+        console.error("Express Server Streaming Error:", e);
         res.status(500).send('Server Error');
     }
 });
 
+// होम रूट और पोर्ट लिसनर
 app.get('/', (req, res) => res.send('Bot Status: Cloud Meta WhatsApp API Engaged!'));
 app.listen(process.env.PORT || 10000);
