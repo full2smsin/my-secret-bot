@@ -12,7 +12,7 @@ const my_chat_id = "5429869370";
 const session_timeout = 300000; // 5 मिनट
 
 // 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स भरें)
-const meta_access_token = "EAAHsYeLLc28BRKkwr4kby90BViTZB5z7LSIZCrOmQHxfBFvTFWHBX3OVOQqWx9k9zXkdlvlm76SXLVA5c2NMkC9oOYZCj6OgdNar1VCUpniZB2jqUvq2w5UpB8LDAzEZCIZBGsZC09OesPlCIXQhZCkG7Rv49RK0mCzZB9YGX1aGS9iKQnJaYz4JZB1B6OGl39liEPZAAZDZD"; // 👈 अपना स्थायी टोकन यहाँ डालें
+const meta_access_token = "EAAHsYeLLc28BRUGB0XOoZBrYwjr6AyAVo98aestJCq91zOGWykEiZAWWHKYp78gkAuZBGEtuVpGMcfSfgtRWtj7tkdBmO8fR4nNerLtfLfV6au0y9Mc6Nvn2Emzc4nkOGQcmXxqVeUaFiFNQmmhYVzNj64nKpEpRPBWyDM0ZBkPM59xDtwrNVhWHXD0dUwZDZD"; // 👈 अपना स्थायी टोकन यहाँ डालें
 const meta_phone_number_id = "102380389232052";   // 👈 अपनी फोन नंबर आईडी यहाँ डालें
 const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
 
