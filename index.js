@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
-// 🔑 कॉन्फ़िगरेशन सेटिंग्स
+//🔑 कॉन्फ़िगरेशन सेटिंग्स
 const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
 const session_timeout = 300000; // 5 मिनट
