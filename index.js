@@ -144,7 +144,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const fetch = require('node-fetch');
         
         // 🎯 CRITICAL FIX: Base String Literals Corrected
-        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${encodeURIComponent(fileId)}`;
+        const getFileUrl = `https://api.telegram.org{token}/getFile?file_id=${encodeURIComponent(fileId)}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
