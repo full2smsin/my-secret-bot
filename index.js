@@ -154,7 +154,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const mediaRes = await fetch(telegramDownloadUrl);
         const fileBuffer = await mediaRes.buffer();
         
-        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना (फिक्स्ड हेडर्स)
+        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना
         const uploadUrl = `${green_api_url}/waInstance${green_instance_id}/uploadFile/${green_api_token}`;
         const ext = type === "photo" ? "jpg" : "pdf";
         
@@ -168,8 +168,12 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         });
         
         const uploadData = await uploadResponse.json();
-        if (!uploadData || !uploadData.urlFile) {
-            console.error("[GreenAPI Upload Failed]", uploadData);
+        
+        // 🎯 मुख्य सुधार: ग्रीन एपीआई यूआरएल को 'url' पैरामीटर में लौटाता है, 'urlFile' में नहीं
+        const verifiedUrl = uploadData.url || uploadData.urlFile;
+        
+        if (!verifiedUrl) {
+            console.error("[GreenAPI Storage Error] Upload didn't return a valid URL:", uploadData);
             return false;
         }
         
@@ -177,7 +181,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const sendUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
         const payload = {
             chatId: `${targetMobile}@c.us`,
-            urlFile: uploadData.urlFile,
+            urlFile: verifiedUrl,
             fileName: `${fileName}.${ext}`,
             caption: `🎯 Vault Document: ${fileName}`
         };
@@ -192,7 +196,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         return !!(response.ok && responseData.idMessage);
         
     } catch (e) {
-        console.error("[GreenAPI Core Error]", e);
+        console.error("[GreenAPI Critical Exception]", e);
         return false;
     }
 }
@@ -231,7 +235,7 @@ bot.on('message', async (msg) => {
         let cleaned_number = text.replace(/[^0-9]/g, '');
         
         if (cleaned_number.length >= 10) {
-            let status_msg = await bot.sendMessage(chatId, `⏳ Green API से फ़ाइल अपलोड और व्हाट्सएप ट्रांसफर की जा रही है, कृपया 2-5 सेकंड रुकें...`, { parse_mode: "Markdown" });
+            let status_msg = await bot.sendMessage(chatId, `⏳ Green API से फ़ाइल क्लाउड पर अपलोड और ट्रांसफर की जा रही है, कृपया 2-4 सेकंड रुकें...`, { parse_mode: "Markdown" });
             
             let isSent = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
@@ -329,8 +333,8 @@ bot.on('message', async (msg) => {
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
-            let old_name = parts[1].trim().toLowerCase();
-            let new_name = parts[2].trim().toLowerCase();
+            let old_name = parts[1].toLowerCase();
+            let new_name = parts[2].toLowerCase();
             let vault = JSON.parse(fs.readFileSync(db_file));
 
             if (!vault[old_name]) {
@@ -358,8 +362,8 @@ bot.on('message', async (msg) => {
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
-            let old_p = parts[1].trim();
-            let new_p = parts[2].trim();
+            let old_p = parts[1];
+            let new_p = parts[2];
             if (old_p === secret_password) {
                 if (new_p.length >= 4) {
                     fs.writeFileSync(config_file, JSON.stringify({ password: new_p }));
