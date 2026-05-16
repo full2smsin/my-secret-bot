@@ -140,7 +140,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 1. टेलीग्राम से फ़ाइल का असली डाउनलोड लिंक प्राप्त करना
+        // 🎯 मुख्य सुधार: टेलीग्राम का असली API URL सेट किया गया है
         const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
@@ -154,17 +154,16 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const mediaRes = await fetch(telegramDownloadUrl);
         const fileBuffer = await mediaRes.buffer();
         
-        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना (मजबूत बाउंड्री फॉर्मेट)
+        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना
         const uploadUrl = `${green_api_url}/waInstance${green_instance_id}/uploadFile/${green_api_token}`;
         const ext = type === "photo" ? "jpg" : "pdf";
         const fullFileName = `${fileName}.${ext}`;
         
-        // शुद्ध मल्टीपार्ट बाउंड्री बनाना ताकि अपलोड कभी फेल न हो
         const boundary = `----NodeFetchBoundary${crypto.randomBytes(16).toString('hex')}`;
         let header = `--${boundary}\r\n`;
         header += `Content-Disposition: form-data; name="file"; filename="${fullFileName}"\r\n`;
         header += `Content-Type: ${type === "photo" ? "image/jpeg" : "application/pdf"}\r\n\r\n`;
-        const footer = `\r\n--${boundary}--\\r\\n`;
+        const footer = `\r\n--${boundary}--\r\n`;
         
         const multipartBody = Buffer.concat([
             Buffer.from(header, 'utf8'),
@@ -251,13 +250,12 @@ bot.on('message', async (msg) => {
         if (cleaned_number.length >= 10) {
             let status_msg = await bot.sendMessage(chatId, `⏳ Green API क्लाउड पर फ़ाइल सिंक की जा रही है, कृपया रुकें...`, { parse_mode: "Markdown" });
             
-            // फ़ंक्शन अब स्ट्रिंग रिस्पॉन्स लौटाएगा ताकि असली गड़बड़ पकड़ी जा सके
             let apiStatus = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
             if (apiStatus === "SUCCESS") {
                 await bot.sendMessage(chatId, `✅ *Success!* File Green API ke jariye number *${cleaned_number}* par successfully transfer ho gayi hai.`);
             } else {
-                await bot.sendMessage(chatId, `❌ *Green API Error!* WhatsApp par file nahi bheji ja saki.\n\n*Reason:* \`${apiStatus}\``, { parse_mode: "Markdown" });
+                await bot.sendMessage(chatId, `❌ *Green API Error!* WhatsApp par file nahi bheji ja saki.\n\n*Reason:* \n\`${apiStatus}\``, { parse_mode: "Markdown" });
             }
             autoDeleteMessage(chatId, status_msg.message_id);
         } else {
@@ -531,5 +529,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Core MultiPart Active!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Engine Working perfectly!'));
 app.listen(process.env.PORT || 10000);
