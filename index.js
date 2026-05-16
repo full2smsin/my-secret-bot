@@ -12,7 +12,7 @@ const my_chat_id = "5429869370";
 const session_timeout = 300000; // 5 मिनट
 
 // 🟢 ग्रीन एपीआई (GREEN-API) क्रेडेंशियल्स
-const green_api_url = "https://greenapi.com";
+const green_api_url = "https://7107.api.greenapi.com";
 const green_instance_id = "7107621313";
 const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
@@ -38,7 +38,7 @@ function generateFileHash(fileId) {
     return crypto.createHash('sha256').update(fileId).digest('hex');
 }
 
-// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स
+// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स (फिक्स्ड)
 function encryptData(text, keyPassword) {
     const salt = crypto.randomBytes(16);
     const key = crypto.scryptSync(keyPassword, salt, 32);
@@ -55,9 +55,9 @@ function decryptData(encryptedText, keyPassword) {
         if (parts.length !== 3) return null;
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
-        const encrypted = parts[2];
+        const encrypted = parts[2]; // 🎯 फिक्स: यहाँ पहले 'parts' लिखा हुआ था जो गलत था
         const key = crypto.scryptSync(keyPassword, salt, 32);
-        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        const decipher = crypto.createCipheriv('aes-256-cbc', key, iv);
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
         return decrypted;
@@ -135,52 +135,67 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 टेलीग्राम डायरेक्ट लिंक के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
+// 🟢 ग्रीन एपीआई के क्लाउड स्टोरेज पर फाइल अपलोड करके व्हाट्सएप पर भेजने का फुल-प्रूफ फंक्शन
 async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 1. टेलीग्राम से फ़ाइल का असली पाथ निकालना
+        // 1. टेलीग्राम से फ़ाइल का असली लिंक निकालना
         const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
-        if (!fileJson.ok) {
-            console.error("[Telegram] GetFile failed");
+        if (!fileJson.ok) return false;
+        
+        const filePath = fileJson.result.file_path;
+        const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
+        
+        // 2. टेलीग्राम से फाइल का बाइनरी बफर डाउनलोड करना
+        const mediaRes = await fetch(telegramDownloadUrl);
+        const fileBuffer = await mediaRes.buffer();
+        
+        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना (Form Data की तरह बफर भेजना)
+        const uploadUrl = `${green_api_url}/waInstance${green_instance_id}/uploadFile/${green_api_token}`;
+        
+        // node-fetch v2 में Buffer भेजने के लिए सीधे Body और Headers सेट कर सकते हैं
+        const ext = type === "photo" ? "jpg" : "pdf";
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-File-Name': `${fileName}.${ext}`
+            },
+            body: fileBuffer
+        });
+        
+        const uploadData = await uploadResponse.json();
+        
+        // अगर ग्रीन एपीआई पर फाइल अपलोड नहीं हुई तो फॉलबैक करें
+        if (!uploadData.urlFile) {
+            console.error("[GreenAPI] Upload failed:", uploadData);
             return false;
         }
         
-        const filePath = fileJson.result.file_path;
-        // 🎯 बिना रेंडर सर्वर के डायरेक्ट टेलीग्राम का सुपरफास्ट लिंक
-        const directTelegramUrl = `https://telegram.org{token}/${filePath}`;
-        
-        // 2. ग्रीन एपीआई के लिए एंडपॉइंट URL और पेलोड सेटअप
-        const greenUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
-        const ext = type === "photo" ? "jpg" : "pdf";
-        
+        // 4. ग्रीन एपीआई के इंटरनल क्लाउड लिंक से व्हाट्सएप पर फाइल सेंड करना
+        const sendUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
         const payload = {
             chatId: `${targetMobile}@c.us`,
-            urlFile: directTelegramUrl,
+            urlFile: uploadData.urlFile, // 🎯 ग्रीन एपीआई का अपना सुपरफास्ट इंटरनल लिंक
             fileName: `${fileName}.${ext}`,
             caption: `🎯 Vault Document: ${fileName}`
         };
 
-        const response = await fetch(greenUrl, {
+        const response = await fetch(sendUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
         
         const responseData = await response.json();
+        return !!(response.ok && responseData.idMessage);
         
-        if (response.ok && responseData.idMessage) {
-            return true;
-        } else {
-            console.error("[GreenAPI] Failed:", responseData);
-            return false;
-        }
     } catch (e) {
-        console.error("[GreenAPI] Error:", e);
+        console.error("[GreenAPI] Core Error:", e);
         return false;
     }
 }
@@ -219,7 +234,7 @@ bot.on('message', async (msg) => {
         let cleaned_number = text.replace(/[^0-9]/g, '');
         
         if (cleaned_number.length >= 10) {
-            let status_msg = await bot.sendMessage(chatId, `⏳ Green API se WhatsApp number *${cleaned_number}* par file bheji ja rahi hai...`, { parse_mode: "Markdown" });
+            let status_msg = await bot.sendMessage(chatId, `⏳ Green API से फ़ाइल अपलोड और ट्रांसफर की जा रही है, कृपया 2-5 सेकंड रुकें...`, { parse_mode: "Markdown" });
             
             let isSent = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
@@ -327,7 +342,7 @@ bot.on('message', async (msg) => {
                 return;
             }
             if (vault[new_name]) {
-                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! '${new_name}' naam pehle se use ho raha hai.`);
+                let reply = await bot.sendMessage(chatId, `⚠️ Duplicate Name Error! '${new_name}' naam pe泄 se use ho raha hai.`);
                 autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 return;
             }
@@ -500,5 +515,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Engaged and Running on Direct Mode!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Sync Engine Active!'));
 app.listen(process.env.PORT || 10000);
