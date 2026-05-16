@@ -55,7 +55,7 @@ function decryptData(encryptedText, keyPassword) {
         if (parts.length !== 3) return null;
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
-        const encrypted = parts[2]; // 🎯 फिक्स: यहाँ parts[2] होना चाहिए था, सिर्फ parts नहीं
+        const encrypted = parts[2]; // 🎯 मुख्य फिक्स: यहाँ parts[2] होना चाहिए था
         const key = crypto.scryptSync(keyPassword, salt, 32);
         const decipher = crypto.createCipheriv('aes-256-cbc', key, iv);
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -140,7 +140,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 1. टेलीग्राम से फ़ाइल का असली लिंक निकालना
+        // 1. टेलीग्राम से फ़ाइल का असली पाथ निकालना
         const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
@@ -321,7 +321,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ कैप्शन एडिट लॉजिक (फिक्स्ड इंडेक्स)
+    // ⚙️ कैप्शन एडिट लॉजिक (पूरी तरह फिक्स्ड इंडेक्स)
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -350,7 +350,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ⚙️ पिन चेंज लॉजिक (फिक्स्ड इंडेक्स)
+    // ⚙️ पिन चेंज लॉजिक (पूरी तरह फिक्स्ड इंडेक्स)
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
@@ -508,5 +508,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Sync Engine Active!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Sync Engine Active and Stable!'));
 app.listen(process.env.PORT || 10000);
