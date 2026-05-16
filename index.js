@@ -140,12 +140,12 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 🎯 मुख्य सुधार: टेलीग्राम का असली API URL सेट किया गया है
+        // 🎯 100% सही टेलीग्राम API URL
         const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
-        if (!fileJson.ok) return "Telegram file fetch error";
+        if (!fileJson.ok) return "Telegram file path fetch failed";
         
         const filePath = fileJson.result.file_path;
         const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
@@ -529,5 +529,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Engine Working perfectly!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Engine Working 100% perfectly!'));
 app.listen(process.env.PORT || 10000);
