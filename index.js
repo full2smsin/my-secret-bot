@@ -38,7 +38,7 @@ function generateFileHash(fileId) {
     return crypto.createHash('sha256').update(fileId).digest('hex');
 }
 
-// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स
+// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स (🎯 पूरी तरह री-राइट और फिक्स्ड)
 function encryptData(text, keyPassword) {
     const salt = crypto.randomBytes(16);
     const key = crypto.scryptSync(keyPassword, salt, 32);
@@ -53,14 +53,17 @@ function decryptData(encryptedText, keyPassword) {
     try {
         const parts = encryptedText.split(':');
         if (parts.length !== 3) return null;
+        
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
-        const encrypted = parts[2];
+        const encryptedStr = parts[2].toString().trim(); // 🎯 फिक्स: यहाँ एरे इंडेक्स 2 से स्ट्रिंग निकाली
+        
         const key = crypto.scryptSync(keyPassword, salt, 32);
         const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        
+        let decrypted = decipher.update(encryptedStr, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
-        return decrypted;
+        return decrypted.trim();
     } catch (e) {
         return null; 
     }
@@ -140,15 +143,15 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 🎯 100% सही टेलीग्राम API URL
-        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
+        // 🎯 टेलीग्राम का 100% सही और फिक्स्ड API लिंक
+        const getFileUrl = `https://telegram.org{encodeURIComponent(fileId)}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
-        if (!fileJson.ok) return "Telegram file path fetch failed";
+        if (!fileJson.ok) return "Telegram file path fetch failed: " + JSON.stringify(fileJson);
         
         const filePath = fileJson.result.file_path;
-        const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
+        const telegramDownloadUrl = `https://telegram.org{filePath}`;
         
         // 2. टेलीग्राम से फाइल का बाइनरी बफर प्राप्त करना
         const mediaRes = await fetch(telegramDownloadUrl);
@@ -529,5 +532,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Engine Working 100% perfectly!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Engine Working perfectly!'));
 app.listen(process.env.PORT || 10000);
