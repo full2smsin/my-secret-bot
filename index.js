@@ -11,10 +11,11 @@ const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370"; 
 const session_timeout = 300000; // 5 मिनट
 
-// 🟢 मेटा व्हाट्सएप एपीआई क्रेडेंशियल्स (यहाँ अपनी असली डिटेल्स भरें)
-const meta_access_token = "EAAucHkxZCs0oBRaUjq2iu8YHiFm4PT6G1ZBCYZA6Lg62TfcdZAfTamYEECZC6rZBvsukmYqkJSdjVJNUsRGqXAQLwaUWcZCt6IMixB3kqoZARicVCpwIuF6vvt9ZApD2wxTQX38lmvmu53NkjZAWZCj6JStrVw7Ft1p0nQkrr0jCcfYlQok3yo3uAlwiCU9lctWswIjrIQzeAgwP5xLsQwY04YFphAHsMZCZA2KJcxyhHtcmihQ1lnD2UuxGsgtLCJpfzyXByq5y482oj1Q3oc5eZApZBwH"; // 👈 अपना स्थायी टोकन यहाँ डालें
-const meta_phone_number_id = "102380389232052";   // 👈 अपनी फोन नंबर आईडी यहाँ डालें
-const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
+// 🟢 ग्रीन एपीआई (GREEN-API) क्रेडेंशियल्स
+const green_api_url = "https://7107.api.greenapi.com";
+const green_instance_id = "7107621313";
+const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+const render_app_url = "https://onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -127,7 +128,6 @@ async function handleWrongAttempt(msg) {
     if (intruder_id !== my_chat_id) {
         await bot.sendMessage(my_chat_id, `🚨 *WARNING:* Kisine bot me galat password dala hai!\n\n` + log_entry, { parse_mode: "Markdown" });
     }
-
     if (attempts >= 3) {
         fs.writeFileSync(blocked_file, "locked");
         updateBotMenu("lock"); 
@@ -136,32 +136,28 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 मेटा क्लाउड एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
-async function sendToWhatsAppMeta(targetMobile, fileId, type, fileName) {
+// 🟢 ग्रीन एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फंक्शन
+async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
-        const metaUrl = `facebook.com{meta_phone_number_id}/messages`;
         
-        // फिक्स: एक्सटेंशन जोड़कर पब्लिक डाउनलोड लिंक बनाना ताकि मेटा एपीआई ब्लॉक न करे
+        // ग्रीन एपीआई के लिए एंडपॉइंट URL
+        const greenUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
+        
         const ext = type === "photo" ? "jpg" : "pdf";
         const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}`;
         
+        // ग्रीन एपीआई पेलोड फॉर्मेट (नंबर के पीछे @c.us होना जरूरी है)
         const payload = {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: targetMobile,
-            type: type === "photo" ? "image" : "document",
-            [type === "photo" ? "image" : "document"]: {
-                link: publicDownloadUrl,
-                caption: `🎯 Vault Document: ${fileName}`,
-                filename: `${fileName}.${ext}`
-            }
+            chatId: `${targetMobile}@c.us`,
+            urlFile: publicDownloadUrl,
+            fileName: `${fileName}.${ext}`,
+            caption: `🎯 Vault Document: ${fileName}`
         };
 
-        const response = await fetch(metaUrl, {
+        const response = await fetch(greenUrl, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${meta_access_token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(payload)
@@ -207,14 +203,15 @@ bot.on('message', async (msg) => {
         let cleaned_number = text.replace(/[^0-9]/g, '');
         
         if (cleaned_number.length >= 10) {
-            let status_msg = await bot.sendMessage(chatId, `⏳ Meta API se WhatsApp number *${cleaned_number}* par file bheji ja rahi hai...`, { parse_mode: "Markdown" });
+            let status_msg = await bot.sendMessage(chatId, `⏳ Green API se WhatsApp number *${cleaned_number}* par file bheji ja rahi hai...`, { parse_mode: "Markdown" });
             
-            let isSent = await sendToWhatsAppMeta(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
+            // यहाँ ग्रीन एपीआई फंक्शन कॉल किया गया है
+            let isSent = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
             if (isSent) {
-                await bot.sendMessage(chatId, `✅ *Success!* File Meta WhatsApp API ke jariye number *${cleaned_number}* par successfully transfer ho gayi hai.`);
+                await bot.sendMessage(chatId, `✅ *Success!* File Green API ke jariye number *${cleaned_number}* par successfully transfer ho gayi hai.`);
             } else {
-                await bot.sendMessage(chatId, `❌ *Meta API Error!* WhatsApp par file nahi bheji ja saki. Kripya apna Token ya Phone ID check karein.`);
+                await bot.sendMessage(chatId, `❌ *Green API Error!* WhatsApp par file nahi bheji ja saki. Kripya apna Instance ID ya Token check karein.`);
             }
             autoDeleteMessage(chatId, status_msg.message_id);
         } else {
@@ -227,7 +224,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (मेटा एपीआई के साथ)
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (ग्रीन एपीआई के साथ)
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -489,20 +486,20 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-// 🟢 फिक्स्ड रेंडर एंडपॉइंट: व्हाट्सएप के लिए टेलीग्राम की फ़ाइल को लाइव बाइनरी स्ट्रीम में बदलना
+// 🟢 रेंडर एंडपॉइंट: ग्रीन एपीआई को लाइव बाइनरी स्ट्रीम पाइप करना
 app.get('/download-vault-file', async (req, res) => {
     const fetch = (await import('node-fetch')).default;
     const reqFileId = req.query.file_id;
     if (!reqFileId) return res.status(400).send('Missing file id');
 
     try {
-        const getFileUrl = `telegram.org{token}/getFile?file_id=${reqFileId}`;
+        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${reqFileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
         if (fileJson.ok) {
             const filePath = fileJson.result.file_path;
-            const downloadUrl = `telegram.org{token}/${filePath}`;
+            const downloadUrl = `https://telegram.org{token}/${filePath}`;
             
             const mediaRes = await fetch(downloadUrl);
             res.setHeader('Content-Type', mediaRes.headers.get('content-type') || 'application/octet-stream');
@@ -515,5 +512,5 @@ app.get('/download-vault-file', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Bot Status: Cloud Meta WhatsApp API Engaged!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Engaged and Running!'));
 app.listen(process.env.PORT || 10000);
