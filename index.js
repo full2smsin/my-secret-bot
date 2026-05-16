@@ -12,10 +12,10 @@ const my_chat_id = "5429869370";
 const session_timeout = 300000; // 5 मिनट
 
 // 🟢 ग्रीन एपीआई (GREEN-API) क्रेडेंशियल्स
-const green_api_url = "https://7107.api.greenapi.com";
+const green_api_url = "https://greenapi.com";
 const green_instance_id = "7107621313";
 const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
-const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
+const render_app_url = "https://onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -136,7 +136,7 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 ग्रीन एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फंक्शन
+// 🟢 ग्रीन एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
 async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
@@ -145,9 +145,9 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const greenUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
         
         const ext = type === "photo" ? "jpg" : "pdf";
-        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}`;
+        // फिक्स: URL में file_name और ext दोनों को पास किया ताकि एक्सप्रेस उसे रीड कर सके
+        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}&file_name=${encodeURIComponent(fileName)}`;
         
-        // ग्रीन एपीआई पेलोड फॉर्मेट (नंबर के पीछे @c.us होना जरूरी है)
         const payload = {
             chatId: `${targetMobile}@c.us`,
             urlFile: publicDownloadUrl,
@@ -486,10 +486,13 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-// 🟢 रेंडर एंडपॉइंट: ग्रीन एपीआई को लाइव बाइनरी स्ट्रीम पाइप करना
+// 🟢 रेंडर एंडपॉइंट: ग्रीन एपीआई को लाइव बाइनरी स्ट्रीम पाइप करना (विथ प्रॉपर हेडर्स)
 app.get('/download-vault-file', async (req, res) => {
     const fetch = (await import('node-fetch')).default;
     const reqFileId = req.query.file_id;
+    const ext = req.query.ext || '';
+    const fileName = req.query.file_name || 'document';
+
     if (!reqFileId) return res.status(400).send('Missing file id');
 
     try {
@@ -502,7 +505,11 @@ app.get('/download-vault-file', async (req, res) => {
             const downloadUrl = `https://telegram.org{token}/${filePath}`;
             
             const mediaRes = await fetch(downloadUrl);
+            
+            // 🎯 मुख्य फिक्स: व्हाट्सएप को फाइल का नाम और प्रकार बताने के लिए हेडर्स सेट करना
             res.setHeader('Content-Type', mediaRes.headers.get('content-type') || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}${ext}"`);
+            
             mediaRes.body.pipe(res);
         } else {
             res.status(404).send('Telegram file error');
