@@ -140,49 +140,60 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // 1. टेलीग्राम से फ़ाइल का असली पाथ निकालना
+        // 1. टेलीग्राम से फ़ाइल का असली डाउनलोड लिंक प्राप्त करना
         const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
-        if (!fileJson.ok) return false;
+        if (!fileJson.ok) return "Telegram file fetch error";
         
         const filePath = fileJson.result.file_path;
         const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
         
-        // 2. टेलीग्राम से फाइल का बाइनरी बफर डाउनलोड करना
+        // 2. टेलीग्राम से फाइल का बाइनरी बफर प्राप्त करना
         const mediaRes = await fetch(telegramDownloadUrl);
         const fileBuffer = await mediaRes.buffer();
         
-        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना
+        // 3. ग्रीन एपीआई के क्लाउड स्टोरेज पर अपलोड करना (मजबूत बाउंड्री फॉर्मेट)
         const uploadUrl = `${green_api_url}/waInstance${green_instance_id}/uploadFile/${green_api_token}`;
         const ext = type === "photo" ? "jpg" : "pdf";
+        const fullFileName = `${fileName}.${ext}`;
+        
+        // शुद्ध मल्टीपार्ट बाउंड्री बनाना ताकि अपलोड कभी फेल न हो
+        const boundary = `----NodeFetchBoundary${crypto.randomBytes(16).toString('hex')}`;
+        let header = `--${boundary}\r\n`;
+        header += `Content-Disposition: form-data; name="file"; filename="${fullFileName}"\r\n`;
+        header += `Content-Type: ${type === "photo" ? "image/jpeg" : "application/pdf"}\r\n\r\n`;
+        const footer = `\r\n--${boundary}--\\r\\n`;
+        
+        const multipartBody = Buffer.concat([
+            Buffer.from(header, 'utf8'),
+            fileBuffer,
+            Buffer.from(footer, 'utf8')
+        ]);
         
         const uploadResponse = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/octet-stream',
-                'X-File-Name': `${fileName}.${ext}`
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': multipartBody.length
             },
-            body: fileBuffer
+            body: multipartBody
         });
         
         const uploadData = await uploadResponse.json();
-        
-        // 🎯 मुख्य सुधार: ग्रीन एपीआई यूआरएल को 'url' पैरामीटर में लौटाता है, 'urlFile' में नहीं
         const verifiedUrl = uploadData.url || uploadData.urlFile;
         
         if (!verifiedUrl) {
-            console.error("[GreenAPI Storage Error] Upload didn't return a valid URL:", uploadData);
-            return false;
+            return `Upload error: ${uploadData.message || JSON.stringify(uploadData)}`;
         }
         
-        // 4. ग्रीन एपीआई के इंटरनल क्लाउड लिंक से व्हाट्सएप पर फाइल सेंड करना
+        // 4. ग्रीन एपीआई लिंक के जरिए व्हाट्सएप पर सेंड करना
         const sendUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
         const payload = {
             chatId: `${targetMobile}@c.us`,
             urlFile: verifiedUrl,
-            fileName: `${fileName}.${ext}`,
+            fileName: fullFileName,
             caption: `🎯 Vault Document: ${fileName}`
         };
 
@@ -193,11 +204,14 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         });
         
         const responseData = await response.json();
-        return !!(response.ok && responseData.idMessage);
+        if (response.ok && responseData.idMessage) {
+            return "SUCCESS";
+        } else {
+            return `Send error: ${responseData.message || JSON.stringify(responseData)}`;
+        }
         
     } catch (e) {
-        console.error("[GreenAPI Critical Exception]", e);
-        return false;
+        return `Exception: ${e.message}`;
     }
 }
 
@@ -235,14 +249,15 @@ bot.on('message', async (msg) => {
         let cleaned_number = text.replace(/[^0-9]/g, '');
         
         if (cleaned_number.length >= 10) {
-            let status_msg = await bot.sendMessage(chatId, `⏳ Green API से फ़ाइल क्लाउड पर अपलोड और ट्रांसफर की जा रही है, कृपया 2-4 सेकंड रुकें...`, { parse_mode: "Markdown" });
+            let status_msg = await bot.sendMessage(chatId, `⏳ Green API क्लाउड पर फ़ाइल सिंक की जा रही है, कृपया रुकें...`, { parse_mode: "Markdown" });
             
-            let isSent = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
+            // फ़ंक्शन अब स्ट्रिंग रिस्पॉन्स लौटाएगा ताकि असली गड़बड़ पकड़ी जा सके
+            let apiStatus = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
-            if (isSent) {
+            if (apiStatus === "SUCCESS") {
                 await bot.sendMessage(chatId, `✅ *Success!* File Green API ke jariye number *${cleaned_number}* par successfully transfer ho gayi hai.`);
             } else {
-                await bot.sendMessage(chatId, `❌ *Green API Error!* WhatsApp par file nahi bheji ja saki. Kripya apna Instance ID ya Token check karein.`);
+                await bot.sendMessage(chatId, `❌ *Green API Error!* WhatsApp par file nahi bheji ja saki.\n\n*Reason:* \`${apiStatus}\``, { parse_mode: "Markdown" });
             }
             autoDeleteMessage(chatId, status_msg.message_id);
         } else {
@@ -516,5 +531,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-app.get('/', (req, res) => res.send('Bot Status: Green API Cloud Sync Engine Active and Stable!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Core MultiPart Active!'));
 app.listen(process.env.PORT || 10000);
