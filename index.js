@@ -145,15 +145,18 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         const greenUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
         
         const ext = type === "photo" ? "jpg" : "pdf";
-        // फिक्स: URL में file_name और ext दोनों को पास किया ताकि एक्सप्रेस उसे रीड कर सके
+        // यूआरएल को बिल्कुल साफ रखें ताकि ग्रीन एपीआई को डाउनलोड करने में आसानी हो
         const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}&file_name=${encodeURIComponent(fileName)}`;
         
+        // ग्रीन एपीआई का सही पेलोड फॉर्मेट
         const payload = {
             chatId: `${targetMobile}@c.us`,
             urlFile: publicDownloadUrl,
             fileName: `${fileName}.${ext}`,
             caption: `🎯 Vault Document: ${fileName}`
         };
+
+        console.log("[GreenAPI] Sending payload:", JSON.stringify(payload));
 
         const response = await fetch(greenUrl, {
             method: "POST",
@@ -163,8 +166,18 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
             body: JSON.stringify(payload)
         });
         
-        return response.ok;
+        const responseData = await response.json();
+        console.log("[GreenAPI] Response Data:", responseData);
+
+        // अगर रिस्पॉन्स में idMessage मिल जाता है, तो मैसेज सफल माना जाता है
+        if (response.ok && responseData.idMessage) {
+            return true;
+        } else {
+            console.error("[GreenAPI] Failed with status:", response.status, responseData);
+            return false;
+        }
     } catch (e) {
+        console.error("[GreenAPI] Exception occurred:", e);
         return false;
     }
 }
