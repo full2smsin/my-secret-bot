@@ -38,7 +38,7 @@ function generateFileHash(fileId) {
     return crypto.createHash('sha256').update(fileId).digest('hex');
 }
 
-// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स (🎯 पूरी तरह री-राइट और फिक्स्ड)
+// 🔒 AES-256 मिलिट्री-ग्रेड इंक्रिप्शन और डिक्रिप्शन फंक्शन्स
 function encryptData(text, keyPassword) {
     const salt = crypto.randomBytes(16);
     const key = crypto.scryptSync(keyPassword, salt, 32);
@@ -56,7 +56,7 @@ function decryptData(encryptedText, keyPassword) {
         
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
-        const encryptedStr = parts[2].toString().trim(); // 🎯 फिक्स: यहाँ एरे इंडेक्स 2 से स्ट्रिंग निकाली
+        const encryptedStr = parts[2].toString().trim(); 
         
         const key = crypto.scryptSync(keyPassword, salt, 32);
         const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
@@ -141,17 +141,17 @@ async function handleWrongAttempt(msg) {
 // 🟢 ग्रीन एपीआई के क्लाउड स्टोरेज पर फाइल अपलोड करके व्हाट्सएप पर भेजने का फिक्स्ड फंक्शन
 async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
-        const fetch = (await import('node-fetch')).default;
+        const fetch = require('node-fetch');
         
         // 🎯 टेलीग्राम का 100% सही और फिक्स्ड API लिंक
-        const getFileUrl = `https://telegram.org{encodeURIComponent(fileId)}`;
+        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${encodeURIComponent(fileId)}`;
         const fileRes = await fetch(getFileUrl);
         const fileJson = await fileRes.json();
         
         if (!fileJson.ok) return "Telegram file path fetch failed: " + JSON.stringify(fileJson);
         
         const filePath = fileJson.result.file_path;
-        const telegramDownloadUrl = `https://telegram.org{filePath}`;
+        const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
         
         // 2. टेलीग्राम से फाइल का बाइनरी बफर प्राप्त करना
         const mediaRes = await fetch(telegramDownloadUrl);
@@ -173,7 +173,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
             fileBuffer,
             Buffer.from(footer, 'utf8')
         ]);
-        
+
         const uploadResponse = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
@@ -271,10 +271,11 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (🎯 फिक्स: यह अब सर्च लॉक एक्टिव होने पर पासवर्ड को इंटरसेप्ट करेगा)
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
+            if (fs.existsSync(attempts_file)) { try{fs.unlinkSync(attempts_file);}catch(e){} }
             let target_keys = s_lock[chatId];
             let vault = JSON.parse(fs.readFileSync(db_file));
             
@@ -306,9 +307,14 @@ bot.on('message', async (msg) => {
             fs.writeFileSync(search_lock_file, JSON.stringify(s_lock));
             autoDeleteMessage(chatId, msg.message_id);
         } else {
-            let reply = await bot.sendMessage(chatId, "❌ *Error:* Galat PIN! Document decrypt nahi kiya ja saka.");
-            autoDeleteMessage(chatId, msg.message_id);
-            autoDeleteMessage(chatId, reply.message_id);
+            // 🎯 फिक्स: सर्च पिन के दौरान गलत पासवर्ड डालने पर brute force ब्लॉक ट्रिगर होगा
+            let current_attempts = await handleWrongAttempt(msg);
+            let remaining = 3 - current_attempts;
+            if (remaining > 0) {
+                let reply = await bot.sendMessage(chatId, `❌ *Error:* Galat PIN! Document decrypt nahi kiya ja saka. (Aapke paas ${remaining} attempt bache hain)`);
+                autoDeleteMessage(chatId, msg.message_id);
+                autoDeleteMessage(chatId, reply.message_id);
+            }
         }
         return;
     }
@@ -385,6 +391,9 @@ bot.on('message', async (msg) => {
                     fs.writeFileSync(config_file, JSON.stringify({ password: new_p }));
                     let reply = await bot.sendMessage(chatId, "✅ *Success:* Password badal diya gaya hai!");
                     autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+                } else {
+                    let reply = await bot.sendMessage(chatId, "❌ Error: Naya password kam se kam 4 characters ka hona chahiye!");
+                    autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
                 }
             } else {
                 let reply = await bot.sendMessage(chatId, "❌ Error: Purana password galat hai!");
@@ -432,6 +441,21 @@ bot.on('message', async (msg) => {
         return;
     }
 
+    if (text_lower === "help" || text_lower === "/help") {
+        let help_text = "📜 *Bot Commands List:* \n\n"
+                      + "🔑 `[password]` - Bot ko unlock karne ke liye\n"
+                      + "🔍 `[file name]` - Kisi bhi file ko search karne ke liye\n"
+                      + "📋 `/show` - Saari files ki list check karne ke liye\n"
+                      + "⚙️ `edit [old] [new]` - File tag badalne ke liye\n"
+                      + "🗑️ `del [name]` - Kisi ek file ko completely hatane ke liye\n"
+                      + "🔄 `changepin [old] [new]` - Security PIN badalne ke liye\n"
+                      + "🔒 `/lock` - Bot ko instantly lock karne ke liye\n"
+                      + "🧹 `/cleanall` - Saara data saaf karne ke liye";
+        let reply = await bot.sendMessage(chatId, help_text, { parse_mode: "Markdown" });
+        autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
+        return;
+    }
+
     // बिना नाम की पेंडिंग फाइल सेव करना
     if (fs.existsSync(pending_file)) {
         let pending_data = JSON.parse(fs.readFileSync(pending_file));
@@ -446,7 +470,7 @@ bot.on('message', async (msg) => {
             vault[text_lower] = pending_data;
             fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
             try{fs.unlinkSync(pending_file);}catch(e){}
-            let reply = await bot.sendMessage(chatId, "🔒 Saved and Encrypted successfully as: " + text);
+            let reply = await bot.sendMessage(chatId, "🔒 Saved and Encrypted successfully as: " + text_lower);
             autoDeleteMessage(chatId, msg.message_id); autoDeleteMessage(chatId, reply.message_id);
             return;
         }
