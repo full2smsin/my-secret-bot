@@ -151,7 +151,7 @@ async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
         if (!fileJson.ok) return "Telegram file path fetch failed: " + JSON.stringify(fileJson);
         
         const filePath = fileJson.result.file_path;
-        const telegramDownloadUrl = `https://telegram.org{token}/${filePath}`;
+        const telegramDownloadUrl = `https://api.telegram.org{token}/${filePath}`;
         
         // 2. टेलीग्राम से फाइल का बाइनरी बफर प्राप्त करना
         const mediaRes = await fetch(telegramDownloadUrl);
