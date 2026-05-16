@@ -15,7 +15,6 @@ const session_timeout = 300000; // 5 मिनट
 const green_api_url = "https://greenapi.com";
 const green_instance_id = "7107621313";
 const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
-const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -136,48 +135,52 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-// 🟢 ग्रीन एपीआई के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
+// 🟢 टेलीग्राम डायरेक्ट लिंक के जरिए व्हाट्सएप पर डायरेक्ट मीडिया भेजने का फिक्स्ड फंक्शन
 async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // ग्रीन एपीआई के लिए एंडपॉइंट URL
+        // 1. टेलीग्राम से फ़ाइल का असली पाथ निकालना
+        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${fileId}`;
+        const fileRes = await fetch(getFileUrl);
+        const fileJson = await fileRes.json();
+        
+        if (!fileJson.ok) {
+            console.error("[Telegram] GetFile failed");
+            return false;
+        }
+        
+        const filePath = fileJson.result.file_path;
+        // 🎯 बिना रेंडर सर्वर के डायरेक्ट टेलीग्राम का सुपरफास्ट लिंक
+        const directTelegramUrl = `https://telegram.org{token}/${filePath}`;
+        
+        // 2. ग्रीन एपीआई के लिए एंडपॉइंट URL और पेलोड सेटअप
         const greenUrl = `${green_api_url}/waInstance${green_instance_id}/sendFileByUrl/${green_api_token}`;
-        
         const ext = type === "photo" ? "jpg" : "pdf";
-        // यूआरएल को बिल्कुल साफ रखें ताकि ग्रीन एपीआई को डाउनलोड करने में आसानी हो
-        const publicDownloadUrl = `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}&file_name=${encodeURIComponent(fileName)}`;
         
-        // ग्रीन एपीआई का सही पेलोड फॉर्मेट
         const payload = {
             chatId: `${targetMobile}@c.us`,
-            urlFile: publicDownloadUrl,
+            urlFile: directTelegramUrl,
             fileName: `${fileName}.${ext}`,
             caption: `🎯 Vault Document: ${fileName}`
         };
 
-        console.log("[GreenAPI] Sending payload:", JSON.stringify(payload));
-
         const response = await fetch(greenUrl, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
         
         const responseData = await response.json();
-        console.log("[GreenAPI] Response Data:", responseData);
-
-        // अगर रिस्पॉन्स में idMessage मिल जाता है, तो मैसेज सफल माना जाता है
+        
         if (response.ok && responseData.idMessage) {
             return true;
         } else {
-            console.error("[GreenAPI] Failed with status:", response.status, responseData);
+            console.error("[GreenAPI] Failed:", responseData);
             return false;
         }
     } catch (e) {
-        console.error("[GreenAPI] Exception occurred:", e);
+        console.error("[GreenAPI] Error:", e);
         return false;
     }
 }
@@ -218,7 +221,6 @@ bot.on('message', async (msg) => {
         if (cleaned_number.length >= 10) {
             let status_msg = await bot.sendMessage(chatId, `⏳ Green API se WhatsApp number *${cleaned_number}* par file bheji ja rahi hai...`, { parse_mode: "Markdown" });
             
-            // यहाँ ग्रीन एपीआई फंक्शन कॉल किया गया है
             let isSent = await sendToWhatsAppGreen(cleaned_number, active_whatsapp_job.file_id, active_whatsapp_job.type, active_whatsapp_job.key);
             
             if (isSent) {
@@ -237,7 +239,7 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // 🔓 डिक्रिप्शन पिन चेक लॉजिक (ग्रीन एपीआई के साथ)
+    // 🔓 डिक्रिप्शन पिन चेक लॉजिक
     let s_lock = JSON.parse(fs.readFileSync(search_lock_file));
     if (s_lock[chatId]) {
         if (text === secret_password) {
@@ -256,7 +258,6 @@ bot.on('message', async (msg) => {
                             autoDeleteMessage(chatId, sent.message_id);
                         }
                         
-                        // व्हाट्सएप सेंडिंग के लिए कतार एक्टिवेट करना
                         let w_mode_data = JSON.parse(fs.readFileSync(whatsapp_mode_file));
                         w_mode_data[chatId] = { file_id: decrypted_file_id, type: vault[key].type, key: key };
                         fs.writeFileSync(whatsapp_mode_file, JSON.stringify(w_mode_data));
@@ -499,38 +500,5 @@ async function handleIncomingFile(msg, type, file_id) {
     }
 }
 
-// 🟢 रेंडर एंडपॉइंट: ग्रीन एपीआई को लाइव बाइनरी स्ट्रीम पाइप करना (विथ प्रॉपर हेडर्स)
-app.get('/download-vault-file', async (req, res) => {
-    const fetch = (await import('node-fetch')).default;
-    const reqFileId = req.query.file_id;
-    const ext = req.query.ext || '';
-    const fileName = req.query.file_name || 'document';
-
-    if (!reqFileId) return res.status(400).send('Missing file id');
-
-    try {
-        const getFileUrl = `https://telegram.org{token}/getFile?file_id=${reqFileId}`;
-        const fileRes = await fetch(getFileUrl);
-        const fileJson = await fileRes.json();
-        
-        if (fileJson.ok) {
-            const filePath = fileJson.result.file_path;
-            const downloadUrl = `https://telegram.org{token}/${filePath}`;
-            
-            const mediaRes = await fetch(downloadUrl);
-            
-            // 🎯 मुख्य फिक्स: व्हाट्सएप को फाइल का नाम और प्रकार बताने के लिए हेडर्स सेट करना
-            res.setHeader('Content-Type', mediaRes.headers.get('content-type') || 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}${ext}"`);
-            
-            mediaRes.body.pipe(res);
-        } else {
-            res.status(404).send('Telegram file error');
-        }
-    } catch (e) {
-        res.status(500).send('Server Error');
-    }
-});
-
-app.get('/', (req, res) => res.send('Bot Status: Green API Engaged and Running!'));
+app.get('/', (req, res) => res.send('Bot Status: Green API Engaged and Running on Direct Mode!'));
 app.listen(process.env.PORT || 10000);
