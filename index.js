@@ -15,7 +15,7 @@ const session_timeout = 300000; // 5 मिनट
 const green_api_url = "https://greenapi.com";
 const green_instance_id = "7107621313";
 const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
-const render_app_url = "https://onrender.com"; // आपकी रेंडर ऐप का लिंक
+const render_app_url = "https://my-secret-bot-o21u.onrender.com"; // आपकी रेंडर ऐप का लिंक
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
