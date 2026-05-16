@@ -55,7 +55,7 @@ function decryptData(encryptedText, keyPassword) {
         if (parts.length !== 3) return null;
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
-        const encrypted = parts[2]; // 🎯 फिक्स: एरे का तीसरा हिस्सा स्ट्रिंग की तरह पास किया
+        const encrypted = parts[2]; // 🎯 100% फिक्स्ड: यहाँ एरे का तीसरा इंडेक्स आएगा
         const key = crypto.scryptSync(keyPassword, salt, 32);
         const decipher = crypto.createCipheriv('aes-256-cbc', key, iv);
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -325,8 +325,8 @@ bot.on('message', async (msg) => {
     if (text_lower.startsWith("edit ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
-            let old_name = parts[1].trim().toLowerCase(); // 🎯 फिक्स: Array इंडेक्स को ट्रिम किया
-            let new_name = parts[2].trim().toLowerCase(); // 🎯 फिक्स: Array इंडेक्स को ट्रिम किया
+            let old_name = parts[1].trim().toLowerCase(); // 🎯 फिक्स: इंडेक्स 1 को सेलेक्ट करके ट्रिम किया
+            let new_name = parts[2].trim().toLowerCase(); // 🎯 फिक्स: इंडेक्स 2 को सेलेक्ट करके ट्रिम किया
             let vault = JSON.parse(fs.readFileSync(db_file));
 
             if (!vault[old_name]) {
@@ -354,8 +354,8 @@ bot.on('message', async (msg) => {
     if (text_lower.startsWith("changepin ")) {
         let parts = text.split(" ");
         if (parts.length === 3) {
-            let old_p = parts[1].trim(); // 🎯 फिक्स: इंडेक्स जोड़ा
-            let new_p = parts[2].trim(); // 🎯 फिक्स: इंडेक्स जोड़ा
+            let old_p = parts[1].trim(); // 🎯 फिक्स: इंडेक्स 1 को सेलेक्ट करके ट्रिम किया
+            let new_p = parts[2].trim(); // 🎯 फिक्स: इंडेक्स 2 को सेलेक्ट करके ट्रिम किया
             if (old_p === secret_password) {
                 if (new_p.length >= 4) {
                     fs.writeFileSync(config_file, JSON.stringify({ password: new_p }));
