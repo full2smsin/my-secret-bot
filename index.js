@@ -2,23 +2,28 @@ const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
 const crypto = require('crypto');
+const fetch = require('node-fetch');
 
 const app = express();
 app.use(express.json());
 
-// ================= CONFIG =================
+/* =========================================
+   CONFIG
+========================================= */
 
 const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370";
 
-const GREEN_API_INSTANCE = "7107621313";
-const GREEN_API_TOKEN = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+const green_api_instance = "7107621313";
+const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
 
 const session_timeout = 300000;
 
-// ================= FILES =================
+/* =========================================
+   FILES
+========================================= */
 
 const db_file = 'my_secure_vault.json';
 const config_file = 'security_config.json';
@@ -26,20 +31,37 @@ const log_file = 'security_alerts.log';
 const session_file = 'bot_session.txt';
 const blocked_file = 'bot_blocked.txt';
 const attempts_file = 'login_attempts.txt';
-const pending_file = 'pending_file.txt';
+const pending_file = 'pending_file.json';
 const search_lock_file = 'search_lock.json';
 const whatsapp_mode_file = 'whatsapp_mode.json';
 
-// ================= INIT =================
+/* =========================================
+   CREATE FILES
+========================================= */
 
-if (!fs.existsSync(db_file)) fs.writeFileSync(db_file, JSON.stringify({}));
-if (!fs.existsSync(config_file)) fs.writeFileSync(config_file, JSON.stringify({ password: "2739" }));
-if (!fs.existsSync(search_lock_file)) fs.writeFileSync(search_lock_file, JSON.stringify({}));
-if (!fs.existsSync(whatsapp_mode_file)) fs.writeFileSync(whatsapp_mode_file, JSON.stringify({}));
+function ensureFile(file, defaultData) {
+    if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, JSON.stringify(defaultData, null, 2));
+    }
+}
 
-const bot = new NTB(token, { polling: true });
+ensureFile(db_file, {});
+ensureFile(config_file, { password: "2739" });
+ensureFile(search_lock_file, {});
+ensureFile(whatsapp_mode_file, {});
+ensureFile(pending_file, {});
 
-// ================= HELPERS =================
+/* =========================================
+   BOT
+========================================= */
+
+const bot = new NTB(token, {
+    polling: true
+});
+
+/* =========================================
+   HELPERS
+========================================= */
 
 function generateFileHash(fileId) {
     return crypto.createHash('sha256').update(fileId).digest('hex');
@@ -55,14 +77,17 @@ function encryptData(text, keyPassword) {
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
 
-    return salt.toString('hex') + ':' + iv.toString('hex') + ':' + encrypted;
+    return `${salt.toString('hex')}:${iv.toString('hex')}:${encrypted}`;
 }
 
 function decryptData(encryptedText, keyPassword) {
     try {
+
         const parts = encryptedText.split(':');
 
-        if (parts.length !== 3) return null;
+        if (parts.length !== 3) {
+            return null;
+        }
 
         const salt = Buffer.from(parts[0], 'hex');
         const iv = Buffer.from(parts[1], 'hex');
@@ -83,45 +108,72 @@ function decryptData(encryptedText, keyPassword) {
 }
 
 function autoDeleteMessage(chatId, msgId) {
+
     setTimeout(async () => {
+
         try {
             await bot.deleteMessage(chatId.toString(), msgId);
         } catch (e) {}
+
     }, 60000);
 }
 
 async function updateBotMenu(status) {
 
-    if (status === "lock") {
-        await bot.setMyCommands([]);
-    } else {
+    try {
 
-        const commands = [
-            { command: "help", description: "All commands" },
-            { command: "show", description: "Show saved files" },
-            { command: "lock", description: "Lock bot" },
-            { command: "cleanall", description: "Delete all data" }
-        ];
+        if (status === "lock") {
 
-        await bot.setMyCommands(commands);
-    }
+            await bot.setMyCommands([]);
+
+        } else {
+
+            await bot.setMyCommands([
+                {
+                    command: "show",
+                    description: "Show files"
+                },
+                {
+                    command: "lock",
+                    description: "Lock bot"
+                },
+                {
+                    command: "cleanall",
+                    description: "Delete all files"
+                }
+            ]);
+        }
+
+    } catch (e) {}
 }
 
 function checkSession() {
 
-    if (fs.existsSync(session_file) && !fs.existsSync(blocked_file)) {
+    try {
 
-        let session_data = JSON.parse(fs.readFileSync(session_file));
+        if (
+            fs.existsSync(session_file) &&
+            !fs.existsSync(blocked_file)
+        ) {
 
-        if (Date.now() - session_data.last_time < session_timeout) {
+            let data = JSON.parse(
+                fs.readFileSync(session_file)
+            );
 
-            session_data.last_time = Date.now();
+            if (
+                Date.now() - data.last_time <
+                session_timeout
+            ) {
 
-            fs.writeFileSync(session_file, JSON.stringify(session_data));
+                data.last_time = Date.now();
 
-            return true;
+                fs.writeFileSync(
+                    session_file,
+                    JSON.stringify(data)
+                );
 
-        } else {
+                return true;
+            }
 
             try {
                 fs.unlinkSync(session_file);
@@ -129,133 +181,169 @@ function checkSession() {
 
             updateBotMenu("lock");
         }
-    }
+
+    } catch (e) {}
 
     return false;
 }
 
 async function handleWrongAttempt(msg) {
 
-    let attempts = fs.existsSync(attempts_file)
-        ? parseInt(fs.readFileSync(attempts_file, 'utf8'))
-        : 0;
+    let attempts = 0;
+
+    if (fs.existsSync(attempts_file)) {
+
+        attempts = parseInt(
+            fs.readFileSync(attempts_file, 'utf8')
+        );
+    }
 
     attempts++;
 
-    fs.writeFileSync(attempts_file, attempts.toString());
+    fs.writeFileSync(
+        attempts_file,
+        attempts.toString()
+    );
 
     let from = msg.from;
 
-    let intruder_name =
-        (from.first_name || '') + ' ' + (from.last_name || '');
+    let name =
+        (from.first_name || '') +
+        ' ' +
+        (from.last_name || '');
 
-    let intruder_username = from.username || 'No Username';
+    let username = from.username || 'No Username';
 
-    let intruder_id = from.id
-        ? from.id.toString()
-        : 'Unknown';
+    let uid = from.id.toString();
 
-    let log_entry =
+    let log =
         `⚠️ Intruder Alert\n` +
-        `Name: ${intruder_name}\n` +
-        `User: @${intruder_username}\n` +
-        `ID: ${intruder_id}\n` +
-        `Time: ${new Date().toLocaleString()}\n\n`;
+        `Name: ${name}\n` +
+        `Username: @${username}\n` +
+        `ID: ${uid}\n\n`;
 
-    fs.appendFileSync(log_file, log_entry);
+    fs.appendFileSync(log_file, log);
 
-    if (intruder_id !== my_chat_id) {
+    if (uid !== my_chat_id) {
 
-        await bot.sendMessage(
-            my_chat_id,
-            `🚨 Wrong Password Alert\n\n${log_entry}`
-        );
+        try {
+
+            await bot.sendMessage(
+                my_chat_id,
+                log
+            );
+
+        } catch (e) {}
     }
 
     if (attempts >= 3) {
 
-        fs.writeFileSync(blocked_file, "locked");
+        fs.writeFileSync(
+            blocked_file,
+            "locked"
+        );
 
         updateBotMenu("lock");
 
         await bot.sendMessage(
             msg.chat.id,
-            "🚨 SYSTEM FREEZE\n3 wrong password attempts."
+            "🚨 BOT FREEZED"
         );
     }
 
     return attempts;
 }
 
-// ================= GREEN API =================
+/* =========================================
+   GREEN API SEND
+========================================= */
 
-async function sendToWhatsAppGreen(targetMobile, fileId, type, fileName) {
+async function sendToWhatsAppGreen(
+    targetMobile,
+    fileId,
+    type,
+    fileName
+) {
 
     try {
 
-        const fetch = (await import('node-fetch')).default;
+        const ext =
+            type === "photo"
+                ? "jpg"
+                : "pdf";
 
-        const ext = type === "photo" ? "jpg" : "pdf";
-
-        const publicDownloadUrl =
+        const fileUrl =
             `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}&ext=.${ext}`;
 
-        const endpoint =
-            `https://api.green-api.com/waInstance${GREEN_API_INSTANCE}/sendFileByUrl/${GREEN_API_TOKEN}`;
+        const url =
+            `https://7105.api.greenapi.com/waInstance${green_api_instance}/sendFileByUrl/${green_api_token}`;
 
         const payload = {
             chatId: `${targetMobile}@c.us`,
-            urlFile: publicDownloadUrl,
+            urlFile: fileUrl,
             fileName: `${fileName}.${ext}`,
-            caption: `Vault File: ${fileName}`
+            caption: `📁 ${fileName}`
         };
 
-        console.log(payload);
-
-        const response = await fetch(endpoint, {
+        const response = await fetch(url, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
-        console.log(data);
+        if (result.idMessage) {
+            return true;
+        }
 
-        return response.ok;
+        return false;
 
     } catch (e) {
-
-        console.log("GREEN API ERROR", e);
 
         return false;
     }
 }
 
-// ================= MESSAGE =================
+/* =========================================
+   MESSAGE
+========================================= */
 
 bot.on('message', async (msg) => {
 
     const chatId = msg.chat.id.toString();
 
-    if (chatId !== my_chat_id) return;
+    if (chatId !== my_chat_id) {
+        return;
+    }
 
-    const text = msg.text ? msg.text.trim() : "";
+    const text =
+        msg.text
+            ? msg.text.trim()
+            : "";
 
-    if (!text) return;
+    const text_lower =
+        text.toLowerCase();
 
-    const text_lower = text.toLowerCase();
+    if (!text) {
+        return;
+    }
 
-    let config_data =
-        JSON.parse(fs.readFileSync(config_file));
+    const config = JSON.parse(
+        fs.readFileSync(config_file)
+    );
 
-    let secret_password = config_data.password;
+    const secret_password =
+        config.password;
 
-    let is_unlocked = checkSession();
+    let unlocked =
+        checkSession();
 
-    // ================= UNBLOCK =================
+    /* =========================
+       UNBLOCK
+    ========================= */
 
     if (text_lower === "unblock bot") {
 
@@ -275,7 +363,9 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ================= BLOCKED =================
+    /* =========================
+       BLOCKED
+    ========================= */
 
     if (fs.existsSync(blocked_file)) {
 
@@ -287,39 +377,39 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ================= WHATSAPP MODE =================
+    /* =========================
+       WHATSAPP MODE
+    ========================= */
 
-    let w_mode =
-        JSON.parse(fs.readFileSync(whatsapp_mode_file));
+    let w_mode = JSON.parse(
+        fs.readFileSync(
+            whatsapp_mode_file
+        )
+    );
 
     if (w_mode[chatId]) {
 
-        let active_whatsapp_job = w_mode[chatId];
+        let job =
+            w_mode[chatId];
 
-        let cleaned_number =
-            text.replace(/[^0-9]/g, '');
+        let mobile =
+            text.replace(/\D/g, '');
 
-        if (cleaned_number.length >= 10) {
+        if (mobile.length >= 10) {
 
-            let status_msg =
-                await bot.sendMessage(
-                    chatId,
-                    `📲 Sending to ${cleaned_number}`
-                );
-
-            let isSent =
+            let sent =
                 await sendToWhatsAppGreen(
-                    cleaned_number,
-                    active_whatsapp_job.file_id,
-                    active_whatsapp_job.type,
-                    active_whatsapp_job.key
+                    mobile,
+                    job.file_id,
+                    job.type,
+                    job.key
                 );
 
-            if (isSent) {
+            if (sent) {
 
                 await bot.sendMessage(
                     chatId,
-                    `✅ WhatsApp File Sent`
+                    `✅ File Sent To WhatsApp`
                 );
 
             } else {
@@ -330,17 +420,12 @@ bot.on('message', async (msg) => {
                 );
             }
 
-            autoDeleteMessage(chatId, status_msg.message_id);
-
         } else {
 
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    "⚠️ Invalid Number"
-                );
-
-            autoDeleteMessage(chatId, reply.message_id);
+            await bot.sendMessage(
+                chatId,
+                `❌ Invalid Number`
+            );
         }
 
         delete w_mode[chatId];
@@ -353,108 +438,79 @@ bot.on('message', async (msg) => {
         return;
     }
 
-    // ================= SEARCH LOCK =================
+    /* =========================
+       SEARCH LOCK
+    ========================= */
 
-    let s_lock =
-        JSON.parse(fs.readFileSync(search_lock_file));
+    let s_lock = JSON.parse(
+        fs.readFileSync(search_lock_file)
+    );
 
     if (s_lock[chatId]) {
 
         if (text === secret_password) {
 
-            let target_keys = s_lock[chatId];
+            let target_keys =
+                s_lock[chatId];
 
             let vault =
-                JSON.parse(fs.readFileSync(db_file));
+                JSON.parse(
+                    fs.readFileSync(db_file)
+                );
 
             for (let key of target_keys) {
 
                 if (vault[key]) {
 
-                    let decrypted_file_id =
+                    let decrypted =
                         decryptData(
                             vault[key].file_id,
                             secret_password
                         );
 
-                    if (decrypted_file_id) {
+                    if (decrypted) {
 
-                        if (vault[key].type === "photo") {
+                        if (
+                            vault[key].type === "photo"
+                        ) {
 
-                            let sent =
-                                await bot.sendPhoto(
-                                    chatId,
-                                    decrypted_file_id,
-                                    {
-                                        caption:
-                                            `Decrypted: ${key}`
-                                    }
-                                );
-
-                            autoDeleteMessage(
+                            await bot.sendPhoto(
                                 chatId,
-                                sent.message_id
+                                decrypted,
+                                {
+                                    caption: key
+                                }
                             );
 
                         } else {
 
-                            let sent =
-                                await bot.sendDocument(
-                                    chatId,
-                                    decrypted_file_id,
-                                    {
-                                        caption:
-                                            `Decrypted: ${key}`
-                                    }
-                                );
-
-                            autoDeleteMessage(
+                            await bot.sendDocument(
                                 chatId,
-                                sent.message_id
+                                decrypted,
+                                {
+                                    caption: key
+                                }
                             );
                         }
 
-                        let w_mode_data =
-                            JSON.parse(
-                                fs.readFileSync(
-                                    whatsapp_mode_file
-                                )
-                            );
-
-                        w_mode_data[chatId] = {
-                            file_id: decrypted_file_id,
+                        w_mode[chatId] = {
+                            file_id: decrypted,
                             type: vault[key].type,
                             key: key
                         };
 
                         fs.writeFileSync(
                             whatsapp_mode_file,
-                            JSON.stringify(w_mode_data)
+                            JSON.stringify(w_mode)
                         );
 
-                        let ask_msg =
-                            await bot.sendMessage(
-                                chatId,
-                                "📲 Send WhatsApp Number"
-                            );
-
-                        autoDeleteMessage(
+                        await bot.sendMessage(
                             chatId,
-                            ask_msg.message_id
+                            "📲 WhatsApp Number Send Karo"
                         );
                     }
                 }
             }
-
-            fs.writeFileSync(
-                session_file,
-                JSON.stringify({
-                    status: 'unlocked',
-                    last_time: Date.now()
-                })
-            );
-
-            updateBotMenu("unlock");
 
             delete s_lock[chatId];
 
@@ -463,21 +519,22 @@ bot.on('message', async (msg) => {
                 JSON.stringify(s_lock)
             );
 
+            return;
+
         } else {
 
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    "❌ Wrong PIN"
-                );
+            await bot.sendMessage(
+                chatId,
+                "❌ Wrong PIN"
+            );
 
-            autoDeleteMessage(chatId, reply.message_id);
+            return;
         }
-
-        return;
     }
 
-    // ================= LOGIN =================
+    /* =========================
+       LOGIN
+    ========================= */
 
     if (text === secret_password) {
 
@@ -488,211 +545,35 @@ bot.on('message', async (msg) => {
         fs.writeFileSync(
             session_file,
             JSON.stringify({
-                status: 'unlocked',
+                status: "unlocked",
                 last_time: Date.now()
             })
         );
 
         updateBotMenu("unlock");
 
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                "🔓 Bot Unlocked"
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
+        await bot.sendMessage(
+            chatId,
+            "🔓 Bot Unlocked"
+        );
 
         return;
     }
 
-    // ================= LOCK =================
+    /* =========================
+       LOCK
+    ========================= */
 
-    if (text_lower === "lock" || text_lower === "/lock") {
+    if (
+        text_lower === "lock" ||
+        text_lower === "/lock"
+    ) {
 
         try {
             fs.unlinkSync(session_file);
         } catch (e) {}
 
         updateBotMenu("lock");
-
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                "🔒 Bot Locked"
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
-
-        return;
-    }
-
-    // ================= WRONG PASSWORD =================
-
-    if (!is_unlocked) {
-
-        let current_attempts =
-            await handleWrongAttempt(msg);
-
-        let remaining = 3 - current_attempts;
-
-        if (remaining > 0) {
-
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Wrong Password\n${remaining} attempts left`
-                );
-
-            autoDeleteMessage(chatId, reply.message_id);
-        }
-
-        return;
-    }
-
-    // ================= CLEAN ALL =================
-
-    if (
-        text_lower === "clean all" ||
-        text_lower === "/cleanall"
-    ) {
-
-        fs.writeFileSync(db_file, JSON.stringify({}));
-
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                "🗑️ All Data Deleted"
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
-
-        return;
-    }
-
-    // ================= SHOW =================
-
-    if (
-        text_lower === "show" ||
-        text_lower === "show all" ||
-        text_lower === "/show"
-    ) {
-
-        let vault =
-            JSON.parse(fs.readFileSync(db_file));
-
-        if (Object.keys(vault).length === 0) {
-
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    "📭 No Files"
-                );
-
-            autoDeleteMessage(chatId, reply.message_id);
-
-            return;
-        }
-
-        let list_all = "🖼️ Saved Files\n\n";
-
-        let count = 1;
-
-        for (let key in vault) {
-
-            list_all +=
-                `${count}. ${key} (${vault[key].type})\n`;
-
-            count++;
-        }
-
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                list_all
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
-
-        return;
-    }
-
-    // ================= SEARCH =================
-
-    let vault =
-        JSON.parse(fs.readFileSync(db_file));
-
-    let matched_keys = [];
-
-    for (let key in vault) {
-
-        if (key.includes(text_lower)) {
-            matched_keys.push(key);
-        }
-    }
-
-    if (matched_keys.length > 0) {
-
-        let s_lock =
-            JSON.parse(fs.readFileSync(search_lock_file));
-
-        s_lock[chatId] = matched_keys;
-
-        fs.writeFileSync(
-            search_lock_file,
-            JSON.stringify(s_lock)
-        );
-
-        let files_list =
-            matched_keys
-                .map(k => `• ${k}`)
-                .join("\n");
-
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                `🔒 FILE LOCKED\n\n${files_list}\n\nSend PIN`
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
-
-        return;
-    }
-
-    let reply =
-        await bot.sendMessage(
-            chatId,
-            `❌ File Not Found`
-        );
-
-    autoDeleteMessage(chatId, reply.message_id);
-});
-
-// ================= FILE HANDLER =================
-
-bot.on('document', async (msg) => {
-    handleIncomingFile(
-        msg,
-        'document',
-        msg.document.file_id
-    );
-});
-
-bot.on('photo', async (msg) => {
-    handleIncomingFile(
-        msg,
-        'photo',
-        msg.photo[msg.photo.length - 1].file_id
-    );
-});
-
-async function handleIncomingFile(msg, type, file_id) {
-
-    const chatId = msg.chat.id.toString();
-
-    if (chatId !== my_chat_id) return;
-
-    if (!checkSession()) {
 
         await bot.sendMessage(
             chatId,
@@ -702,158 +583,594 @@ async function handleIncomingFile(msg, type, file_id) {
         return;
     }
 
-    let config_data =
-        JSON.parse(fs.readFileSync(config_file));
+    /* =========================
+       WRONG PASS
+    ========================= */
 
-    let secret_password =
-        config_data.password;
+    if (!unlocked) {
 
-    let vault =
-        JSON.parse(fs.readFileSync(db_file));
+        let current =
+            await handleWrongAttempt(msg);
 
-    let current_file_hash =
-        generateFileHash(file_id);
+        let remaining =
+            3 - current;
 
-    for (let key in vault) {
+        if (remaining > 0) {
 
-        if (vault[key].hash === current_file_hash) {
+            await bot.sendMessage(
+                chatId,
+                `❌ Wrong Password\nAttempts Left: ${remaining}`
+            );
+        }
 
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    `⚠️ Duplicate File`
+        return;
+    }
+
+    /* =========================
+       SHOW
+    ========================= */
+
+    if (
+        text_lower === "show" ||
+        text_lower === "/show"
+    ) {
+
+        let vault =
+            JSON.parse(
+                fs.readFileSync(db_file)
+            );
+
+        if (
+            Object.keys(vault).length === 0
+        ) {
+
+            await bot.sendMessage(
+                chatId,
+                "📭 No Files"
+            );
+
+            return;
+        }
+
+        let data =
+            "📂 Files\n\n";
+
+        let count = 1;
+
+        for (let key in vault) {
+
+            data +=
+                `${count}. ${key}\n`;
+
+            count++;
+        }
+
+        await bot.sendMessage(
+            chatId,
+            data
+        );
+
+        return;
+    }
+
+    /* =========================
+       DELETE
+    ========================= */
+
+    if (
+        text_lower.startsWith("del ")
+    ) {
+
+        let target =
+            text_lower
+                .replace("del ", '')
+                .trim();
+
+        let vault =
+            JSON.parse(
+                fs.readFileSync(db_file)
+            );
+
+        if (vault[target]) {
+
+            delete vault[target];
+
+            fs.writeFileSync(
+                db_file,
+                JSON.stringify(vault, null, 2)
+            );
+
+            await bot.sendMessage(
+                chatId,
+                "🗑 Deleted"
+            );
+        }
+
+        return;
+    }
+
+    /* =========================
+       CLEAN
+    ========================= */
+
+    if (
+        text_lower === "clean all" ||
+        text_lower === "/cleanall"
+    ) {
+
+        fs.writeFileSync(
+            db_file,
+            JSON.stringify({})
+        );
+
+        await bot.sendMessage(
+            chatId,
+            "🧹 All Cleaned"
+        );
+
+        return;
+    }
+
+    /* =========================
+       CHANGE PIN
+    ========================= */
+
+    if (
+        text_lower.startsWith("changepin ")
+    ) {
+
+        let parts =
+            text.split(" ");
+
+        if (parts.length === 3) {
+
+            let old_pin =
+                parts[1];
+
+            let new_pin =
+                parts[2];
+
+            if (
+                old_pin === secret_password
+            ) {
+
+                fs.writeFileSync(
+                    config_file,
+                    JSON.stringify({
+                        password: new_pin
+                    })
                 );
 
-            autoDeleteMessage(chatId, reply.message_id);
+                await bot.sendMessage(
+                    chatId,
+                    "✅ PIN Changed"
+                );
+
+            } else {
+
+                await bot.sendMessage(
+                    chatId,
+                    "❌ Wrong Old PIN"
+                );
+            }
+        }
+
+        return;
+    }
+
+    /* =========================
+       EDIT
+    ========================= */
+
+    if (
+        text_lower.startsWith("edit ")
+    ) {
+
+        let parts =
+            text.split(" ");
+
+        if (parts.length === 3) {
+
+            let old_name =
+                parts[1]
+                    .trim()
+                    .toLowerCase();
+
+            let new_name =
+                parts[2]
+                    .trim()
+                    .toLowerCase();
+
+            let vault =
+                JSON.parse(
+                    fs.readFileSync(db_file)
+                );
+
+            if (!vault[old_name]) {
+
+                await bot.sendMessage(
+                    chatId,
+                    "❌ Old File Missing"
+                );
+
+                return;
+            }
+
+            if (vault[new_name]) {
+
+                await bot.sendMessage(
+                    chatId,
+                    "❌ Duplicate Name"
+                );
+
+                return;
+            }
+
+            vault[new_name] =
+                vault[old_name];
+
+            delete vault[old_name];
+
+            fs.writeFileSync(
+                db_file,
+                JSON.stringify(vault, null, 2)
+            );
+
+            await bot.sendMessage(
+                chatId,
+                "✅ Renamed"
+            );
+        }
+
+        return;
+    }
+
+    /* =========================================
+       PENDING FILE SAVE FIX
+    ========================================= */
+
+    if (fs.existsSync(pending_file)) {
+
+        let pendingData =
+            JSON.parse(
+                fs.readFileSync(pending_file)
+            );
+
+        if (
+            pendingData &&
+            pendingData.file_id
+        ) {
+
+            let vault =
+                JSON.parse(
+                    fs.readFileSync(db_file)
+                );
+
+            let saveName =
+                text_lower;
+
+            if (vault[saveName]) {
+
+                await bot.sendMessage(
+                    chatId,
+                    "⚠️ Duplicate Name"
+                );
+
+                return;
+            }
+
+            pendingData.file_id =
+                encryptData(
+                    pendingData.file_id,
+                    secret_password
+                );
+
+            vault[saveName] =
+                pendingData;
+
+            fs.writeFileSync(
+                db_file,
+                JSON.stringify(vault, null, 2)
+            );
+
+            fs.writeFileSync(
+                pending_file,
+                JSON.stringify({})
+            );
+
+            await bot.sendMessage(
+                chatId,
+                `✅ Saved As ${saveName}`
+            );
 
             return;
         }
     }
 
-    let file_info = {
+    /* =========================
+       SEARCH
+    ========================= */
+
+    let vault =
+        JSON.parse(
+            fs.readFileSync(db_file)
+        );
+
+    let matched = [];
+
+    for (let key in vault) {
+
+        if (
+            key.includes(text_lower)
+        ) {
+
+            matched.push(key);
+        }
+    }
+
+    if (matched.length > 0) {
+
+        let lock =
+            JSON.parse(
+                fs.readFileSync(search_lock_file)
+            );
+
+        lock[chatId] = matched;
+
+        fs.writeFileSync(
+            search_lock_file,
+            JSON.stringify(lock)
+        );
+
+        let files =
+            matched
+                .map(x => `• ${x}`)
+                .join("\n");
+
+        await bot.sendMessage(
+            chatId,
+            `🔒 Files Found\n\n${files}\n\nPIN Send Karo`
+        );
+
+        return;
+    }
+
+    await bot.sendMessage(
+        chatId,
+        "❌ File Not Found"
+    );
+});
+
+/* =========================================
+   FILE HANDLER
+========================================= */
+
+bot.on(
+    'document',
+    async (msg) => {
+
+        await handleIncomingFile(
+            msg,
+            'document',
+            msg.document.file_id
+        );
+    }
+);
+
+bot.on(
+    'photo',
+    async (msg) => {
+
+        await handleIncomingFile(
+            msg,
+            'photo',
+            msg.photo[msg.photo.length - 1].file_id
+        );
+    }
+);
+
+async function handleIncomingFile(
+    msg,
+    type,
+    file_id
+) {
+
+    const chatId =
+        msg.chat.id.toString();
+
+    if (chatId !== my_chat_id) {
+        return;
+    }
+
+    if (!checkSession()) {
+
+        await bot.sendMessage(
+            chatId,
+            "🔒 Unlock First"
+        );
+
+        return;
+    }
+
+    const config =
+        JSON.parse(
+            fs.readFileSync(config_file)
+        );
+
+    const secret_password =
+        config.password;
+
+    let vault =
+        JSON.parse(
+            fs.readFileSync(db_file)
+        );
+
+    let currentHash =
+        generateFileHash(file_id);
+
+    for (let key in vault) {
+
+        if (
+            vault[key].hash === currentHash
+        ) {
+
+            await bot.sendMessage(
+                chatId,
+                `⚠️ Duplicate File\nAlready Saved As ${key}`
+            );
+
+            return;
+        }
+    }
+
+    let fileInfo = {
         file_id: file_id,
         type: type,
-        hash: current_file_hash
+        hash: currentHash
     };
 
-    if (msg.caption && msg.caption.trim() !== "") {
+    /* =========================
+       WITH CAPTION
+    ========================= */
 
-        let k_db =
-            msg.caption.trim().toLowerCase();
+    if (
+        msg.caption &&
+        msg.caption.trim() !== ""
+    ) {
 
-        if (vault[k_db]) {
+        let saveKey =
+            msg.caption
+                .trim()
+                .toLowerCase();
 
-            let reply =
-                await bot.sendMessage(
-                    chatId,
-                    `⚠️ Duplicate Name`
-                );
+        if (vault[saveKey]) {
 
-            autoDeleteMessage(chatId, reply.message_id);
+            await bot.sendMessage(
+                chatId,
+                "⚠️ Duplicate Name"
+            );
 
             return;
         }
 
-        file_info.file_id =
+        fileInfo.file_id =
             encryptData(
                 file_id,
                 secret_password
             );
 
-        vault[k_db] = file_info;
+        vault[saveKey] =
+            fileInfo;
 
         fs.writeFileSync(
             db_file,
             JSON.stringify(vault, null, 2)
         );
 
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                `🔒 Saved: ${msg.caption}`
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
+        await bot.sendMessage(
+            chatId,
+            `✅ Saved As ${saveKey}`
+        );
 
     } else {
 
+        /* =========================
+           WITHOUT CAPTION FIXED
+        ========================= */
+
         fs.writeFileSync(
             pending_file,
-            JSON.stringify(file_info)
+            JSON.stringify(fileInfo, null, 2)
         );
 
-        let reply =
-            await bot.sendMessage(
-                chatId,
-                "❓ Send File Name"
-            );
-
-        autoDeleteMessage(chatId, reply.message_id);
+        await bot.sendMessage(
+            chatId,
+            "❓ File Name Batao"
+        );
     }
 }
 
-// ================= DOWNLOAD =================
+/* =========================================
+   DOWNLOAD API
+========================================= */
 
-app.get('/download-vault-file', async (req, res) => {
+app.get(
+    '/download-vault-file',
+    async (req, res) => {
 
-    const fetch = (await import('node-fetch')).default;
+        try {
 
-    const reqFileId = req.query.file_id;
+            const fileId =
+                req.query.file_id;
 
-    if (!reqFileId) {
-        return res.status(400).send('Missing file id');
-    }
+            if (!fileId) {
 
-    try {
+                return res
+                    .status(400)
+                    .send('Missing File ID');
+            }
 
-        const getFileUrl =
-            `https://api.telegram.org/bot${token}/getFile?file_id=${reqFileId}`;
+            const tgRes =
+                await fetch(
+                    `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
+                );
 
-        const fileRes =
-            await fetch(getFileUrl);
+            const tgJson =
+                await tgRes.json();
 
-        const fileJson =
-            await fileRes.json();
+            if (!tgJson.ok) {
 
-        if (!fileJson.ok) {
-            return res.status(404).send('Telegram API Error');
+                return res
+                    .status(404)
+                    .send('Telegram Error');
+            }
+
+            const filePath =
+                tgJson.result.file_path;
+
+            const fileUrl =
+                `https://api.telegram.org/file/bot${token}/${filePath}`;
+
+            const media =
+                await fetch(fileUrl);
+
+            res.setHeader(
+                'Content-Type',
+                media.headers.get('content-type')
+            );
+
+            media.body.pipe(res);
+
+        } catch (e) {
+
+            res
+                .status(500)
+                .send('Server Error');
         }
-
-        const filePath =
-            fileJson.result.file_path;
-
-        const downloadUrl =
-            `https://api.telegram.org/file/bot${token}/${filePath}`;
-
-        const mediaRes =
-            await fetch(downloadUrl);
-
-        res.setHeader(
-            'Content-Type',
-            mediaRes.headers.get('content-type')
-            || 'application/octet-stream'
-        );
-
-        mediaRes.body.pipe(res);
-
-    } catch (e) {
-
-        console.log(e);
-
-        res.status(500).send('Server Error');
     }
-});
+);
 
-// ================= ROOT =================
+/* =========================================
+   ROOT
+========================================= */
 
 app.get('/', (req, res) => {
-    res.send('Green API Vault Bot Running');
+
+    res.send(
+        'Bot Running Successfully'
+    );
 });
 
-// ================= START =================
+/* =========================================
+   START
+========================================= */
 
-const PORT = process.env.PORT || 10000;
+const PORT =
+    process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-    console.log(`Server Running On ${PORT}`);
+
+    console.log(
+        `Server Running On ${PORT}`
+    );
 });
