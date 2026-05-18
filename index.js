@@ -9,14 +9,14 @@ app.use(express.json());
 
 // ================= CONFIG =================
 
-const token = 'YOUR_TELEGRAM_BOT_TOKEN';
-const my_chat_id = 'YOUR_TELEGRAM_CHAT_ID';
+const token = '8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM';
+const my_chat_id = '5429869370';
 const session_timeout = 300000;
 
 // Green API
 const green_api_url = 'https://api.green-api.com';
-const green_instance_id = 'YOUR_GREEN_INSTANCE_ID';
-const green_api_token = 'YOUR_GREEN_API_TOKEN';
+const green_instance_id = '7107621313';
+const green_api_token = '960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e';
 
 // Files
 const db_file = 'my_secure_vault.json';
