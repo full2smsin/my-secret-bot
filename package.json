@@ -1,5 +1,5 @@
 {
-  "name": "vault-bot",
+  "name": "secure-vault-bot",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
