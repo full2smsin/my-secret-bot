@@ -1,16 +1,4 @@
-# Telegram Secure Vault Bot + Green API (Full Working Version)
 
-## Install Packages
-
-```bash
-npm install node-telegram-bot-api express node-fetch@3
-```
-
----
-
-# index.js
-
-```js
 const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
