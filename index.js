@@ -1,102 +1,140 @@
-const TelegramBot = require('node-telegram-bot-api');
+const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
+const express = require('express');
 const crypto = require('crypto');
-const axios = require('axios');
+const fetch = require('node-fetch');
+
+const app = express();
+app.use(express.json({ limit: '200mb' }));
 
 /* ================= CONFIG ================= */
 
-const TOKEN = process.env.BOT_TOKEN || "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
-const MY_CHAT_ID = "5429869370";
+const token = "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
+const my_chat_id = "5429869370";
 
-const WHATSAPP_API_URL = "https://whatsapp-sms-production.up.railway.app";
-const WHATSAPP_API_TOKEN = "27031992";
+const whatsapp_api_base =
+    "https://whatsapp-sms-production.up.railway.app";
 
-/* ================= BOT (STABLE POLLING) ================= */
-
-const bot = new TelegramBot(TOKEN, {
-    polling: {
-        interval: 2500,
-        autoStart: true
-    }
-});
-
-bot.on("polling_error", (err) => {
-    console.log("POLL ERROR:", err.code || err.message);
-});
-
-/* ================= FILE HELPERS ================= */
-
-function read(file, fallback) {
-    try {
-        if (!fs.existsSync(file)) return fallback;
-        return JSON.parse(fs.readFileSync(file));
-    } catch {
-        return fallback;
-    }
-}
-
-function write(file, data) {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
+const API_TOKEN = "27031992";
+const session_timeout = 300000;
 
 /* ================= FILES ================= */
 
-const DB = "vault.json";
-const CONFIG = "config.json";
-const SESSION = "session.json";
-const BLOCKED = "blocked.txt";
-const SEARCH_LOCK = "search_lock.json";
-const WHATSAPP_MODE = "whatsapp_mode.json";
+const db_file = 'my_secure_vault.json';
+const config_file = 'security_config.json';
+const log_file = 'security_alerts.log';
+const session_file = 'bot_session.txt';
+const blocked_file = 'bot_blocked.txt';
+const attempts_file = 'login_attempts.txt';
+const pending_file = 'pending_file.json';
+const search_lock_file = 'search_lock.json';
+const whatsapp_mode_file = 'whatsapp_mode.json';
 
-/* ================= INIT ================= */
+/* ================= INIT FILES ================= */
 
-write(DB, read(DB, {}));
-write(CONFIG, read(CONFIG, { password: "2739" }));
-
-/* ================= SESSION ================= */
-
-function isSessionValid() {
-    const s = read(SESSION, null);
-    if (!s) return false;
-    return Date.now() - s.last_time < 300000;
+function ensureFile(file, data) {
+    if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, JSON.stringify(data, null, 2));
+    }
 }
 
-/* ================= WHATSAPP SEND ================= */
+ensureFile(db_file, {});
+ensureFile(config_file, { password: "2739" });
+ensureFile(search_lock_file, {});
+ensureFile(whatsapp_mode_file, {});
+ensureFile(pending_file, {});
 
-async function sendWhatsApp(number, fileId, name) {
+/* ================= BOT ================= */
+
+const bot = new NTB(token, { polling: true });
+
+/* ================= HELPERS ================= */
+
+function generateFileHash(fileId) {
+    return crypto.createHash('sha256').update(fileId).digest('hex');
+}
+
+function encrypt(text, key) {
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(16);
+    const k = crypto.scryptSync(key, salt, 32);
+
+    const cipher = crypto.createCipheriv('aes-256-cbc', k, iv);
+    let enc = cipher.update(text, 'utf8', 'hex');
+    enc += cipher.final('hex');
+
+    return salt.toString('hex') + ':' + iv.toString('hex') + ':' + enc;
+}
+
+function decrypt(text, key) {
     try {
-        const tg = await axios.get(
-            `https://api.telegram.org/bot${TOKEN}/getFile?file_id=${fileId}`
-        );
+        const [s, i, d] = text.split(':');
+        const salt = Buffer.from(s, 'hex');
+        const iv = Buffer.from(i, 'hex');
+        const k = crypto.scryptSync(key, salt, 32);
 
-        const fileUrl =
-            `https://api.telegram.org/file/bot${TOKEN}/${tg.data.result.file_path}`;
+        const decipher = crypto.createDecipheriv('aes-256-cbc', k, iv);
+        let dec = decipher.update(d, 'hex', 'utf8');
+        dec += decipher.final('utf8');
+        return dec;
+    } catch {
+        return null;
+    }
+}
 
-        const file = await axios.get(fileUrl, {
-            responseType: "arraybuffer",
-            timeout: 20000
-        });
+function sessionValid() {
+    try {
+        if (!fs.existsSync(session_file)) return false;
 
-        const base64 = Buffer.from(file.data).toString("base64");
+        const s = JSON.parse(fs.readFileSync(session_file));
 
-        const res = await axios.post(
-            WHATSAPP_API_URL + "/send-file-base64",
+        if (Date.now() - s.last < session_timeout) {
+            s.last = Date.now();
+            fs.writeFileSync(session_file, JSON.stringify(s));
+            return true;
+        }
+
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+/* ================= WHATSAPP (RAILWAY API ONLY) ================= */
+
+async function sendToWhatsAppGreen(
+    targetMobile,
+    fileId,
+    type,
+    fileName
+) {
+    try {
+
+        const cleanNumber =
+            String(targetMobile).replace(/\D/g, '');
+
+        const response = await fetch(
+            `${whatsapp_api_base}/send-file-base64`,
             {
-                number: "91" + number.replace(/\D/g, ""),
-                base64,
-                mimeType: "application/octet-stream",
-                fileName: name,
-                caption: name
-            },
-            {
+                method: 'POST',
                 headers: {
-                    "x-api-token": WHATSAPP_API_TOKEN
+                    'Content-Type': 'application/json',
+                    'x-api-token': API_TOKEN
                 },
-                timeout: 20000
+                body: JSON.stringify({
+                    number: cleanNumber,
+                    file_id: fileId,
+                    type: type,
+                    fileName: fileName
+                })
             }
         );
 
-        return res.data?.status === "success";
+        const result = await response.json();
+
+        console.log("WA RESPONSE:", result);
+
+        return result.status === "success";
 
     } catch (e) {
         console.log("WA ERROR:", e.message);
@@ -104,98 +142,145 @@ async function sendWhatsApp(number, fileId, name) {
     }
 }
 
-/* ================= BOT ================= */
+/* ================= MESSAGE HANDLER ================= */
 
-bot.on("message", async (msg) => {
+bot.on('message', async (msg) => {
 
-    try {
+    const chatId = String(msg.chat.id);
+    const text = (msg.text || "").trim().toLowerCase();
 
-        const chatId = String(msg.chat.id);
-        const text = (msg.text || "").trim();
-        const lower = text.toLowerCase();
+    if (chatId !== my_chat_id) return;
 
-        if (chatId !== MY_CHAT_ID) return;
+    const config = JSON.parse(fs.readFileSync(config_file));
+    const pass = config.password;
 
-        const config = read(CONFIG, { password: "2739" });
+    /* BLOCKED */
+    if (fs.existsSync(blocked_file)) {
+        return bot.sendMessage(chatId, "🚨 Bot Frozen");
+    }
 
-        /* ================= UNBLOCK ================= */
-        if (lower === "unblock bot") {
-            try { fs.unlinkSync(BLOCKED); } catch {}
-            return bot.sendMessage(chatId, "✅ Unblocked");
+    /* LOGIN */
+    if (text === pass) {
+        fs.writeFileSync(session_file, JSON.stringify({
+            last: Date.now()
+        }));
+
+        return bot.sendMessage(chatId, "🔓 Unlocked");
+    }
+
+    if (!sessionValid()) {
+        return bot.sendMessage(chatId, "🔒 Enter Password");
+    }
+
+    /* SHOW */
+    if (text === "show") {
+        const vault = JSON.parse(fs.readFileSync(db_file));
+
+        if (!Object.keys(vault).length) {
+            return bot.sendMessage(chatId, "No Files");
         }
 
-        /* ================= BLOCK CHECK ================= */
-        if (fs.existsSync(BLOCKED)) {
-            return bot.sendMessage(chatId, "🚨 Bot Frozen");
-        }
+        return bot.sendMessage(
+            chatId,
+            Object.keys(vault).join("\n")
+        );
+    }
 
-        /* ================= LOGIN ================= */
-        if (text === config.password) {
-            write(SESSION, { last_time: Date.now() });
-            return bot.sendMessage(chatId, "🔓 Unlocked");
-        }
+    /* SEARCH */
+    const vault = JSON.parse(fs.readFileSync(db_file));
+    const found = Object.keys(vault).filter(k =>
+        k.includes(text)
+    );
 
-        /* ================= LOCK ================= */
-        if (lower === "lock") {
-            try { fs.unlinkSync(SESSION); } catch {}
-            return bot.sendMessage(chatId, "🔒 Locked");
-        }
+    if (found.length) {
+        fs.writeFileSync(search_lock_file, JSON.stringify({
+            [chatId]: found
+        }));
 
-        /* ================= SESSION CHECK ================= */
-        if (!isSessionValid()) {
-            return bot.sendMessage(chatId, "❌ Wrong Password");
-        }
+        return bot.sendMessage(chatId,
+            "Found:\n" + found.join("\n") + "\nSend PIN"
+        );
+    }
 
-        /* ================= SHOW ================= */
-        if (lower === "show") {
-            const vault = read(DB, {});
-            return bot.sendMessage(chatId,
-                Object.keys(vault).join("\n") || "No Files"
-            );
-        }
+    bot.sendMessage(chatId, "Not Found");
+});
 
-        /* ================= DELETE ================= */
-        if (lower.startsWith("del ")) {
-            const key = lower.replace("del ", "");
-            const vault = read(DB, {});
-            delete vault[key];
-            write(DB, vault);
-            return bot.sendMessage(chatId, "🗑 Deleted");
-        }
+/* ================= FILE HANDLER ================= */
 
-        /* ================= CLEAN ALL ================= */
-        if (lower === "cleanall") {
-            write(DB, {});
-            return bot.sendMessage(chatId, "🧹 All Deleted");
-        }
+bot.on('document', async (msg) =>
+    handleFile(msg, msg.document.file_id, 'document')
+);
 
-        /* ================= SEARCH ================= */
+bot.on('photo', async (msg) =>
+    handleFile(msg, msg.photo[msg.photo.length - 1].file_id, 'photo')
+);
 
-        const vault = read(DB, {});
-        let matches = [];
+async function handleFile(msg, fileId, type) {
 
-        for (let k in vault) {
-            if (k.includes(lower)) matches.push(k);
-        }
+    const chatId = String(msg.chat.id);
 
-        if (matches.length) {
+    if (chatId !== my_chat_id) return;
 
-            const lock = read(SEARCH_LOCK, {});
-            lock[chatId] = matches;
-            write(SEARCH_LOCK, lock);
+    if (!sessionValid()) {
+        return bot.sendMessage(chatId, "Unlock first");
+    }
 
-            return bot.sendMessage(chatId,
-                "🔒 Found:\n" + matches.join("\n")
-            );
-        }
+    const vault = JSON.parse(fs.readFileSync(db_file));
+    const key = msg.caption?.toLowerCase();
 
-        return bot.sendMessage(chatId, "❌ Not Found");
+    if (!key) {
+        fs.writeFileSync(pending_file, JSON.stringify({ fileId, type }));
+        return bot.sendMessage(chatId, "Send file name");
+    }
 
-    } catch (e) {
-        console.log("BOT ERROR:", e.message);
+    vault[key] = {
+        fileId: encrypt(fileId, "2739"),
+        type
+    };
+
+    fs.writeFileSync(db_file, JSON.stringify(vault, null, 2));
+
+    bot.sendMessage(chatId, "Saved");
+}
+
+/* ================= WHATSAPP MODE ================= */
+
+bot.on('message', async (msg) => {
+
+    const chatId = String(msg.chat.id);
+    const text = msg.text;
+
+    if (!text) return;
+
+    const wMode = JSON.parse(fs.readFileSync(whatsapp_mode_file));
+
+    if (wMode[chatId]) {
+
+        const mobile = text.replace(/\D/g, '');
+        const data = wMode[chatId];
+
+        const ok = await sendToWhatsAppGreen(
+            mobile,
+            data.fileId,
+            data.type,
+            data.key || "file"
+        );
+
+        delete wMode[chatId];
+        fs.writeFileSync(whatsapp_mode_file, JSON.stringify(wMode));
+
+        return bot.sendMessage(chatId,
+            ok ? "Sent to WhatsApp" : "Failed"
+        );
     }
 });
 
-/* ================= START ================= */
+/* ================= SERVER ================= */
 
-console.log("🚀 PRO BOT RUNNING");
+app.get("/", (req, res) => {
+    res.send("Bot Running");
+});
+
+app.listen(process.env.PORT || 10000, () => {
+    console.log("Server Started");
+});
