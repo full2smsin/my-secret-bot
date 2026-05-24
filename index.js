@@ -3,6 +3,7 @@ const fs = require('fs');
 const express = require('express');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
@@ -352,7 +353,6 @@ async function handleWrongAttempt(msg) {
 
     return attempts;
 }
-
 async function sendToWhatsAppGreen(
     targetMobile,
     fileId,
@@ -366,10 +366,6 @@ async function sendToWhatsAppGreen(
             type === "photo"
                 ? "jpg"
                 : "pdf";
-
-        /* =====================================
-           GET TELEGRAM FILE PATH
-        ===================================== */
 
         const tgRes =
             await fetch(
@@ -399,10 +395,6 @@ async function sendToWhatsAppGreen(
             telegramFileUrl
         );
 
-        /* =====================================
-           DOWNLOAD TELEGRAM FILE
-        ===================================== */
-
         const fileResponse =
             await axios.get(
 
@@ -424,10 +416,6 @@ async function sendToWhatsAppGreen(
             Buffer.from(
                 fileResponse.data
             ).toString('base64');
-
-        /* =====================================
-           SEND TO WHATSAPP
-        ===================================== */
 
         const response =
             await fetch(
