@@ -353,10 +353,6 @@ async function handleWrongAttempt(msg) {
     return attempts;
 }
 
-/* =========================================
-   WHATSAPP SEND
-========================================= */
-
 async function sendToWhatsAppGreen(
     targetMobile,
     fileId,
@@ -371,9 +367,9 @@ async function sendToWhatsAppGreen(
                 ? "jpg"
                 : "pdf";
 
-        /* =========================
-           GET TELEGRAM FILE
-        ========================= */
+        /* =====================================
+           GET TELEGRAM FILE PATH
+        ===================================== */
 
         const tgRes =
             await fetch(
@@ -386,7 +382,7 @@ async function sendToWhatsAppGreen(
         if (!tgJson.ok) {
 
             console.log(
-                'TELEGRAM FILE ERROR'
+                'GET FILE FAILED'
             );
 
             return false;
@@ -403,16 +399,40 @@ async function sendToWhatsAppGreen(
             telegramFileUrl
         );
 
-        /* =========================
-           SEND TO WHATSAPP API
-        ========================= */
+        /* =====================================
+           DOWNLOAD TELEGRAM FILE
+        ===================================== */
+
+        const fileResponse =
+            await axios.get(
+
+                telegramFileUrl,
+
+                {
+
+                    responseType:
+                        'arraybuffer'
+                }
+            );
+
+        const mimeType =
+            fileResponse.headers[
+                'content-type'
+            ];
+
+        const base64 =
+            Buffer.from(
+                fileResponse.data
+            ).toString('base64');
+
+        /* =====================================
+           SEND TO WHATSAPP
+        ===================================== */
 
         const response =
             await fetch(
 
-                whatsapp_api_url +
-
-                '/send-file-url',
+                'https://whatsapp-sms-production.up.railway.app/send-file-base64',
 
                 {
 
@@ -424,7 +444,7 @@ async function sendToWhatsAppGreen(
                             'application/json',
 
                         'x-api-token':
-                            whatsapp_api_token
+                            'my_secure_token'
                     },
 
                     body:
@@ -434,8 +454,11 @@ async function sendToWhatsAppGreen(
                                 String(targetMobile)
                                     .replace(/\D/g, ''),
 
-                            fileUrl:
-                                telegramFileUrl,
+                            base64:
+                                base64,
+
+                            mimeType:
+                                mimeType,
 
                             fileName:
                                 `${fileName}.${ext}`,
@@ -454,14 +477,9 @@ async function sendToWhatsAppGreen(
             result
         );
 
-        if (
+        return (
             result.status === 'success'
-        ) {
-
-            return true;
-        }
-
-        return false;
+        );
 
     } catch (e) {
 
