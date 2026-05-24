@@ -12,7 +12,7 @@ CONFIG
 ========================================= */
 
 const token =
-    "8779446953:AAHNQY4NDc3XMyjku6e0m_PT0G54mZk5HU8";
+    "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
 
 const my_chat_id =
     "5429869370";
