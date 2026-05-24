@@ -371,8 +371,41 @@ async function sendToWhatsAppGreen(
                 ? "jpg"
                 : "pdf";
 
-        const fileUrl =
-            `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}`;
+        /* =========================
+           GET TELEGRAM FILE
+        ========================= */
+
+        const tgRes =
+            await fetch(
+                `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
+            );
+
+        const tgJson =
+            await tgRes.json();
+
+        if (!tgJson.ok) {
+
+            console.log(
+                'TELEGRAM FILE ERROR'
+            );
+
+            return false;
+        }
+
+        const filePath =
+            tgJson.result.file_path;
+
+        const telegramFileUrl =
+            `https://api.telegram.org/file/bot${token}/${filePath}`;
+
+        console.log(
+            'TELEGRAM FILE URL:',
+            telegramFileUrl
+        );
+
+        /* =========================
+           SEND TO WHATSAPP API
+        ========================= */
 
         const response =
             await fetch(
@@ -398,10 +431,11 @@ async function sendToWhatsAppGreen(
                         JSON.stringify({
 
                             number:
-                                targetMobile,
+                                String(targetMobile)
+                                    .replace(/\D/g, ''),
 
                             fileUrl:
-                                fileUrl,
+                                telegramFileUrl,
 
                             fileName:
                                 `${fileName}.${ext}`,
