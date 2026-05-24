@@ -14,8 +14,11 @@ app.use(express.json());
 const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 const my_chat_id = "5429869370";
 
-const green_api_instance = "7107621313";
-const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+const whatsapp_api_url =
+    'https://whatsapp-sms-production.up.railway.app';
+
+const whatsapp_api_token =
+    '27031992';
 
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
 
@@ -351,7 +354,7 @@ async function handleWrongAttempt(msg) {
 }
 
 /* =========================================
-   GREEN API SEND
+   WHATSAPP SEND
 ========================================= */
 
 async function sendToWhatsAppGreen(
@@ -371,44 +374,56 @@ async function sendToWhatsAppGreen(
         const fileUrl =
             `${render_app_url}/download-vault-file?file_id=${encodeURIComponent(fileId)}`;
 
-        const url =
-            `https://api.green-api.com/waInstance${green_api_instance}/sendFileByUrl/${green_api_token}`;
-
-        const payload = {
-
-            chatId:
-                `${targetMobile}@c.us`,
-
-            urlFile:
-                fileUrl,
-
-            fileName:
-                `${fileName}.${ext}`,
-
-            caption:
-                `📁 ${fileName}`
-        };
-
         const response =
-            await fetch(url, {
+            await fetch(
 
-                method: "POST",
+                whatsapp_api_url +
 
-                headers: {
-                    'Content-Type':
-                        'application/json'
-                },
+                '/send-file-url',
 
-                body:
-                    JSON.stringify(payload)
-            });
+                {
+
+                    method: 'POST',
+
+                    headers: {
+
+                        'Content-Type':
+                            'application/json',
+
+                        'x-api-token':
+                            whatsapp_api_token
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            number:
+                                targetMobile,
+
+                            fileUrl:
+                                fileUrl,
+
+                            fileName:
+                                `${fileName}.${ext}`,
+
+                            caption:
+                                `📁 ${fileName}`
+                        })
+                }
+            );
 
         const result =
             await response.json();
 
-        console.log(result);
+        console.log(
+            'WHATSAPP RESULT:',
+            result
+        );
 
-        if (result.idMessage) {
+        if (
+            result.status === 'success'
+        ) {
+
             return true;
         }
 
@@ -416,12 +431,14 @@ async function sendToWhatsAppGreen(
 
     } catch (e) {
 
-        console.log(e);
+        console.log(
+            'WHATSAPP ERROR:',
+            e.message
+        );
 
         return false;
     }
 }
-
 /* =========================================
    MESSAGE
 ========================================= */
