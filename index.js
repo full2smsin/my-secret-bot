@@ -1,7 +1,6 @@
 const NTB = require('node-telegram-bot-api');
 const fs = require('fs');
 const express = require('express');
-const crypto = require('crypto');
 const fetch = require('node-fetch');
 
 const app = express();
@@ -12,65 +11,92 @@ app.use(express.json());
 CONFIG
 ========================================= */
 
-const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
+const token =
+    "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 
-const my_chat_id = "5429869370";
+const my_chat_id =
+    "5429869370";
 
 const render_app_url =
-    "https://YOUR-RENDER-URL.onrender.com";
+    "https://my-secret-bot-o21u.onrender.com";
 
 const whatsapp_api_url =
     "https://whatsapp-sms-production.up.railway.app";
 
 const whatsapp_api_token =
-    "my_secure_token";
-
-const session_timeout = 300000;
+    "27031992";
 
 /* =========================================
 FILES
 ========================================= */
 
-const session_file =
-    'bot_session.txt';
-
 const whatsapp_mode_file =
     'whatsapp_mode.json';
 
 /* =========================================
-AUTO CREATE FILES
+AUTO CREATE FILE
 ========================================= */
 
-function ensureFile(file, data) {
+if (
+    !fs.existsSync(
+        whatsapp_mode_file
+    )
+) {
 
-    if (!fs.existsSync(file)) {
+    fs.writeFileSync(
 
-        fs.writeFileSync(
-            file,
-            JSON.stringify(data, null, 2)
-        );
-    }
+        whatsapp_mode_file,
+
+        JSON.stringify({})
+    );
 }
 
-ensureFile(
-    whatsapp_mode_file,
-    {}
-);
-
 /* =========================================
-BOT
+TELEGRAM BOT
 ========================================= */
 
 const bot = new NTB(token, {
-    polling: true
+
+    polling: {
+
+        interval: 1000,
+
+        autoStart: true,
+
+        params: {
+
+            timeout: 10
+        }
+    }
 });
+
+/* =========================================
+REMOVE WEBHOOK
+========================================= */
+
+bot.deleteWebHook()
+
+    .then(() => {
+
+        console.log(
+            'Webhook Removed'
+        );
+
+    })
+
+    .catch((e) => {
+
+        console.log(e);
+    });
 
 /* =========================================
 AUTO DELETE
 ========================================= */
 
 function autoDeleteMessage(
+
     chatId,
+
     msgId
 ) {
 
@@ -79,7 +105,9 @@ function autoDeleteMessage(
         try {
 
             await bot.deleteMessage(
+
                 chatId.toString(),
+
                 msgId
             );
 
@@ -89,71 +117,42 @@ function autoDeleteMessage(
 }
 
 /* =========================================
-CHECK SESSION
-========================================= */
-
-function checkSession() {
-
-    try {
-
-        if (
-            fs.existsSync(session_file)
-        ) {
-
-            let session_data = JSON.parse(
-                fs.readFileSync(session_file)
-            );
-
-            if (
-                Date.now() -
-                session_data.last_time <
-                session_timeout
-            ) {
-
-                session_data.last_time =
-                    Date.now();
-
-                fs.writeFileSync(
-                    session_file,
-                    JSON.stringify(session_data)
-                );
-
-                return true;
-            }
-        }
-
-    } catch (e) {}
-
-    return false;
-}
-
-/* =========================================
 WHATSAPP SEND
 ========================================= */
 
 async function sendToWhatsApp(
+
     targetMobile,
+
     fileId,
+
     type,
+
     fileName
 ) {
 
     try {
 
         const ext =
-            type === "photo"
-                ? "jpg"
-                : "pdf";
+
+            type === 'photo'
+                ? 'jpg'
+                : 'pdf';
 
         const fileUrl =
+
             render_app_url +
+
             '/download-vault-file?file_id=' +
+
             encodeURIComponent(fileId);
 
         const response =
+
             await fetch(
 
                 whatsapp_api_url +
+
                 '/send-file-url',
 
                 {
@@ -204,161 +203,220 @@ async function sendToWhatsApp(
 
     } catch (e) {
 
-        console.log(e);
+        console.log(
+            'WHATSAPP ERROR:',
+            e.message
+        );
 
         return false;
     }
 }
 
 /* =========================================
-MESSAGE
+MESSAGE EVENT
 ========================================= */
 
 bot.on(
+
     'message',
 
     async (msg) => {
 
-        const chatId =
-            msg.chat.id.toString();
+        try {
 
-        if (
-            chatId !== my_chat_id
-        ) {
-
-            return;
-        }
-
-        const text =
-            msg.text
-                ? msg.text.trim()
-                : "";
-
-        if (!text) {
-
-            return;
-        }
-
-        let w_mode =
-            JSON.parse(
-
-                fs.readFileSync(
-                    whatsapp_mode_file
-                )
-            );
-
-        /* =========================================
-        WHATSAPP MODE
-        ========================================= */
-
-        if (w_mode[chatId]) {
-
-            let active_job =
-                w_mode[chatId];
-
-            let mobile =
-                text.replace(
-                    /\D/g,
-                    ''
-                );
+            const chatId =
+                msg.chat.id.toString();
 
             if (
-                mobile.length >= 10
+                chatId !== my_chat_id
             ) {
 
-                let wait_msg =
-                    await bot.sendMessage(
+                return;
+            }
 
-                        chatId,
+            const text =
 
-                        `Sending File To WhatsApp ${mobile}`
-                    );
+                msg.text
+                    ? msg.text.trim()
+                    : '';
 
-                autoDeleteMessage(
-                    chatId,
-                    wait_msg.message_id
+            if (!text) {
+
+                return;
+            }
+
+            let w_mode =
+
+                JSON.parse(
+
+                    fs.readFileSync(
+                        whatsapp_mode_file
+                    )
                 );
 
-                let sent =
-                    await sendToWhatsApp(
+            /* =========================================
+            WHATSAPP MODE
+            ========================================= */
 
-                        mobile,
+            if (
+                w_mode[chatId]
+            ) {
 
-                        active_job.file_id,
+                let active_job =
+                    w_mode[chatId];
 
-                        active_job.type,
+                let mobile =
 
-                        active_job.key
+                    text.replace(
+                        /\D/g,
+                        ''
                     );
 
-                if (sent) {
+                if (
+                    mobile.length >= 10
+                ) {
 
-                    let ok =
+                    let wait_msg =
+
                         await bot.sendMessage(
 
                             chatId,
 
-                            '✅ File Sent To WhatsApp'
+                            `Sending File To WhatsApp ${mobile}`
                         );
 
                     autoDeleteMessage(
+
                         chatId,
-                        ok.message_id
+
+                        wait_msg.message_id
                     );
+
+                    let sent =
+
+                        await sendToWhatsApp(
+
+                            mobile,
+
+                            active_job.file_id,
+
+                            active_job.type,
+
+                            active_job.key
+                        );
+
+                    if (sent) {
+
+                        let ok =
+
+                            await bot.sendMessage(
+
+                                chatId,
+
+                                '✅ File Sent To WhatsApp'
+                            );
+
+                        autoDeleteMessage(
+
+                            chatId,
+
+                            ok.message_id
+                        );
+
+                    } else {
+
+                        let fail =
+
+                            await bot.sendMessage(
+
+                                chatId,
+
+                                '❌ WhatsApp Send Failed'
+                            );
+
+                        autoDeleteMessage(
+
+                            chatId,
+
+                            fail.message_id
+                        );
+                    }
 
                 } else {
 
-                    let fail =
+                    let invalid =
+
                         await bot.sendMessage(
 
                             chatId,
 
-                            '❌ WhatsApp Send Failed'
+                            '❌ Invalid Number'
                         );
 
                     autoDeleteMessage(
+
                         chatId,
-                        fail.message_id
+
+                        invalid.message_id
                     );
                 }
 
-            } else {
+                delete w_mode[chatId];
 
-                let invalid =
+                fs.writeFileSync(
+
+                    whatsapp_mode_file,
+
+                    JSON.stringify(w_mode)
+                );
+
+                autoDeleteMessage(
+
+                    chatId,
+
+                    msg.message_id
+                );
+
+                return;
+            }
+
+            /* =========================================
+            START COMMAND
+            ========================================= */
+
+            if (
+                text === '/start'
+            ) {
+
+                let m =
+
                     await bot.sendMessage(
 
                         chatId,
 
-                        '❌ Invalid Number'
+                        '✅ Bot Running Successfully'
                     );
 
                 autoDeleteMessage(
+
                     chatId,
-                    invalid.message_id
+
+                    m.message_id
                 );
             }
 
-            delete w_mode[chatId];
+        } catch (e) {
 
-            fs.writeFileSync(
-
-                whatsapp_mode_file,
-
-                JSON.stringify(w_mode)
+            console.log(
+                'BOT ERROR:',
+                e.message
             );
-
-            autoDeleteMessage(
-                chatId,
-                msg.message_id
-            );
-
-            return;
         }
     }
 );
 
 /* =========================================
-DOWNLOAD API
+DOWNLOAD FILE
 ========================================= */
 
 app.get(
@@ -375,16 +433,24 @@ app.get(
             if (!fileId) {
 
                 return res
+
                     .status(400)
-                    .send('Missing File ID');
+
+                    .send(
+                        'Missing File ID'
+                    );
             }
 
             const tgRes =
+
                 await fetch(
 
                     'https://api.telegram.org/bot' +
+
                     token +
+
                     '/getFile?file_id=' +
+
                     fileId
                 );
 
@@ -394,17 +460,25 @@ app.get(
             if (!tgJson.ok) {
 
                 return res
+
                     .status(404)
-                    .send('Telegram Error');
+
+                    .send(
+                        'Telegram Error'
+                    );
             }
 
             const filePath =
                 tgJson.result.file_path;
 
             const fileUrl =
+
                 'https://api.telegram.org/file/bot' +
+
                 token +
+
                 '/' +
+
                 filePath;
 
             const media =
@@ -426,8 +500,12 @@ app.get(
             console.log(e);
 
             res
+
                 .status(500)
-                .send('Server Error');
+
+                .send(
+                    'Server Error'
+                );
         }
     }
 );
@@ -456,7 +534,7 @@ app.get('/health', (req, res) => {
 });
 
 /* =========================================
-START
+START SERVER
 ========================================= */
 
 const PORT =
@@ -465,6 +543,7 @@ const PORT =
 app.listen(PORT, () => {
 
     console.log(
+
         `Server Running On ${PORT}`
     );
 });
