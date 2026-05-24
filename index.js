@@ -18,9 +18,7 @@ const my_chat_id = "5429869370";
 const whatsapp_api_url =
     'https://whatsapp-sms-production.up.railway.app';
 
-const API_TOKEN =
-    '27031992';
-
+const whatsapp_api_token = '27031992';
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
 
 const session_timeout = 300000;
