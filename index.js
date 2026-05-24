@@ -12,9 +12,9 @@ app.use(express.json());
 CONFIG
 ========================================= */
 
-const token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
 
-const my_chat_id = "7107621313";
+const my_chat_id = "5429869370";
 
 const render_app_url =
     "https://YOUR-RENDER-URL.onrender.com";
