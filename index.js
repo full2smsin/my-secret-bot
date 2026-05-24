@@ -430,7 +430,7 @@ async function sendToWhatsAppGreen(
                             'application/json',
 
                         'x-api-token':
-                            'my_secure_token'
+                            'whatsapp_api_token'
                     },
 
                     body:
