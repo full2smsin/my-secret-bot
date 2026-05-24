@@ -11,7 +11,7 @@ app.use(express.json());
    CONFIG
 ========================================= */
 
-const token = "8779446953:AAG9jVGcT2-fdoHNWhcfW1tpef8WEjuCQZM";
+const token = "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
 const my_chat_id = "5429869370";
 
 const whatsapp_api_url =
