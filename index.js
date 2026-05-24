@@ -1,6 +1,6 @@
 const NTB = require('node-telegram-bot-api');
-const fs = require('fs');
 const express = require('express');
+const fs = require('fs');
 const fetch = require('node-fetch');
 
 const app = express();
@@ -12,19 +12,19 @@ CONFIG
 ========================================= */
 
 const token =
-    "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
+    '8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk';
 
 const my_chat_id =
-    "5429869370";
+    '5429869370';
 
 const render_app_url =
-    "https://my-secret-bot-o21u.onrender.com";
+    'https://my-secret-bot-o21u.onrender.com';
 
 const whatsapp_api_url =
-    "https://whatsapp-sms-production.up.railway.app";
+    'https://whatsapp-sms-production.up.railway.app';
 
 const whatsapp_api_token =
-    "27031992";
+    '27031992';
 
 /* =========================================
 FILES
@@ -32,10 +32,6 @@ FILES
 
 const whatsapp_mode_file =
     'whatsapp_mode.json';
-
-/* =========================================
-AUTO CREATE FILE
-========================================= */
 
 if (
     !fs.existsSync(
@@ -55,39 +51,38 @@ if (
 TELEGRAM BOT
 ========================================= */
 
-const bot = new NTB(token, {
-
-    polling: {
-
-        interval: 1000,
-
-        autoStart: true,
-
-        params: {
-
-            timeout: 10
-        }
-    }
-});
+const bot =
+    new NTB(token);
 
 /* =========================================
-REMOVE WEBHOOK
+WEBHOOK
 ========================================= */
 
-bot.deleteWebHook()
+const WEBHOOK_URL =
+    render_app_url;
 
-    .then(() => {
+bot.setWebHook(
 
-        console.log(
-            'Webhook Removed'
+    WEBHOOK_URL +
+
+    '/bot' +
+
+    token
+);
+
+app.post(
+
+    '/bot' + token,
+
+    (req, res) => {
+
+        bot.processUpdate(
+            req.body
         );
 
-    })
-
-    .catch((e) => {
-
-        console.log(e);
-    });
+        res.sendStatus(200);
+    }
+);
 
 /* =========================================
 AUTO DELETE
@@ -203,17 +198,14 @@ async function sendToWhatsApp(
 
     } catch (e) {
 
-        console.log(
-            'WHATSAPP ERROR:',
-            e.message
-        );
+        console.log(e);
 
         return false;
     }
 }
 
 /* =========================================
-MESSAGE EVENT
+MESSAGES
 ========================================= */
 
 bot.on(
@@ -245,6 +237,92 @@ bot.on(
                 return;
             }
 
+            /* =========================================
+            START
+            ========================================= */
+
+            if (
+                text === '/start'
+            ) {
+
+                let m =
+
+                    await bot.sendMessage(
+
+                        chatId,
+
+                        '✅ Bot Running Successfully'
+                    );
+
+                autoDeleteMessage(
+
+                    chatId,
+
+                    m.message_id
+                );
+
+                return;
+            }
+
+            /* =========================================
+            SEND TEST FILE
+            ========================================= */
+
+            if (
+                text === '/test'
+            ) {
+
+                let w_mode =
+
+                    JSON.parse(
+
+                        fs.readFileSync(
+                            whatsapp_mode_file
+                        )
+                    );
+
+                w_mode[chatId] = {
+
+                    file_id:
+                        'YOUR_FILE_ID',
+
+                    type:
+                        'document',
+
+                    key:
+                        'test-file'
+                };
+
+                fs.writeFileSync(
+
+                    whatsapp_mode_file,
+
+                    JSON.stringify(w_mode)
+                );
+
+                let ask =
+
+                    await bot.sendMessage(
+
+                        chatId,
+
+                        'Send WhatsApp Number'
+                    );
+
+                autoDeleteMessage(
+
+                    chatId,
+
+                    ask.message_id
+                );
+
+                return;
+            }
+
+            /* =========================================
+            WHATSAPP MODE
+            ========================================= */
+
             let w_mode =
 
                 JSON.parse(
@@ -253,10 +331,6 @@ bot.on(
                         whatsapp_mode_file
                     )
                 );
-
-            /* =========================================
-            WHATSAPP MODE
-            ========================================= */
 
             if (
                 w_mode[chatId]
@@ -276,20 +350,20 @@ bot.on(
                     mobile.length >= 10
                 ) {
 
-                    let wait_msg =
+                    let wait =
 
                         await bot.sendMessage(
 
                             chatId,
 
-                            `Sending File To WhatsApp ${mobile}`
+                            'Sending To WhatsApp...'
                         );
 
                     autoDeleteMessage(
 
                         chatId,
 
-                        wait_msg.message_id
+                        wait.message_id
                     );
 
                     let sent =
@@ -313,7 +387,7 @@ bot.on(
 
                                 chatId,
 
-                                '✅ File Sent To WhatsApp'
+                                '✅ Sent Successfully'
                             );
 
                         autoDeleteMessage(
@@ -331,7 +405,7 @@ bot.on(
 
                                 chatId,
 
-                                '❌ WhatsApp Send Failed'
+                                '❌ Failed'
                             );
 
                         autoDeleteMessage(
@@ -369,48 +443,11 @@ bot.on(
 
                     JSON.stringify(w_mode)
                 );
-
-                autoDeleteMessage(
-
-                    chatId,
-
-                    msg.message_id
-                );
-
-                return;
-            }
-
-            /* =========================================
-            START COMMAND
-            ========================================= */
-
-            if (
-                text === '/start'
-            ) {
-
-                let m =
-
-                    await bot.sendMessage(
-
-                        chatId,
-
-                        '✅ Bot Running Successfully'
-                    );
-
-                autoDeleteMessage(
-
-                    chatId,
-
-                    m.message_id
-                );
             }
 
         } catch (e) {
 
-            console.log(
-                'BOT ERROR:',
-                e.message
-            );
+            console.log(e);
         }
     }
 );
@@ -433,9 +470,7 @@ app.get(
             if (!fileId) {
 
                 return res
-
                     .status(400)
-
                     .send(
                         'Missing File ID'
                     );
@@ -460,9 +495,7 @@ app.get(
             if (!tgJson.ok) {
 
                 return res
-
                     .status(404)
-
                     .send(
                         'Telegram Error'
                     );
@@ -500,9 +533,7 @@ app.get(
             console.log(e);
 
             res
-
                 .status(500)
-
                 .send(
                     'Server Error'
                 );
@@ -517,33 +548,45 @@ ROOT
 app.get('/', (req, res) => {
 
     res.send(
-        'Bot Running Successfully'
+        'Bot Running'
     );
 });
 
 /* =========================================
-HEALTH
-========================================= */
-
-app.get('/health', (req, res) => {
-
-    res.status(200).json({
-
-        status: 'running'
-    });
-});
-
-/* =========================================
-START SERVER
+START
 ========================================= */
 
 const PORT =
     process.env.PORT || 10000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
 
     console.log(
-
         `Server Running On ${PORT}`
     );
+
+    try {
+
+        await bot.deleteWebHook({
+
+            drop_pending_updates: true
+        });
+
+        await bot.setWebHook(
+
+            WEBHOOK_URL +
+
+            '/bot' +
+
+            token
+        );
+
+        console.log(
+            'Webhook Set Successfully'
+        );
+
+    } catch (e) {
+
+        console.log(e);
+    }
 });
