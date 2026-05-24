@@ -2,41 +2,29 @@ const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
-const fetch = require('node-fetch');
 
 /* ================= CONFIG ================= */
 
-const token = process.env.BOT_TOKEN || "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
-const my_chat_id = "5429869370";
+const TOKEN = process.env.BOT_TOKEN || "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
+const MY_CHAT_ID = "5429869370";
 
-const whatsapp_api_url = 'https://whatsapp-sms-production.up.railway.app';
-const whatsapp_api_token = '27031992';
+const WHATSAPP_API_URL = "https://whatsapp-sms-production.up.railway.app";
+const WHATSAPP_API_TOKEN = "27031992";
 
-/* ================= BOT (FIXED POLLING) ================= */
+/* ================= BOT (STABLE POLLING) ================= */
 
-const bot = new TelegramBot(token, {
+const bot = new TelegramBot(TOKEN, {
     polling: {
-        interval: 2000,
+        interval: 2500,
         autoStart: true
     }
 });
 
 bot.on("polling_error", (err) => {
-    console.log("POLLING ERROR:", err.code || err.message);
+    console.log("POLL ERROR:", err.code || err.message);
 });
 
-/* ================= FILES ================= */
-
-const db_file = 'my_secure_vault.json';
-const config_file = 'security_config.json';
-const session_file = 'bot_session.txt';
-const blocked_file = 'bot_blocked.txt';
-const attempts_file = 'login_attempts.txt';
-const pending_file = 'pending_file.json';
-const search_lock_file = 'search_lock.json';
-const whatsapp_mode_file = 'whatsapp_mode.json';
-
-/* ================= SAFE FILE READ ================= */
+/* ================= FILE HELPERS ================= */
 
 function read(file, fallback) {
     try {
@@ -51,61 +39,64 @@ function write(file, data) {
     fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+/* ================= FILES ================= */
+
+const DB = "vault.json";
+const CONFIG = "config.json";
+const SESSION = "session.json";
+const BLOCKED = "blocked.txt";
+const SEARCH_LOCK = "search_lock.json";
+const WHATSAPP_MODE = "whatsapp_mode.json";
+
 /* ================= INIT ================= */
 
-write(db_file, read(db_file, {}));
-write(config_file, read(config_file, { password: "2739" }));
+write(DB, read(DB, {}));
+write(CONFIG, read(CONFIG, { password: "2739" }));
 
 /* ================= SESSION ================= */
 
-function checkSession() {
-    try {
-        const s = read(session_file, null);
-        if (!s) return false;
-
-        return Date.now() - s.last_time < 300000;
-    } catch {
-        return false;
-    }
+function isSessionValid() {
+    const s = read(SESSION, null);
+    if (!s) return false;
+    return Date.now() - s.last_time < 300000;
 }
 
-/* ================= WHATSAPP SEND (FIX ONLY) ================= */
+/* ================= WHATSAPP SEND ================= */
 
-async function sendToWhatsAppGreen(number, fileId, type, name) {
+async function sendWhatsApp(number, fileId, name) {
     try {
-
         const tg = await axios.get(
-            `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
+            `https://api.telegram.org/bot${TOKEN}/getFile?file_id=${fileId}`
         );
 
         const fileUrl =
-            `https://api.telegram.org/file/bot${token}/${tg.data.result.file_path}`;
+            `https://api.telegram.org/file/bot${TOKEN}/${tg.data.result.file_path}`;
 
         const file = await axios.get(fileUrl, {
-            responseType: 'arraybuffer'
+            responseType: "arraybuffer",
+            timeout: 20000
         });
 
-        const base64 = Buffer.from(file.data).toString('base64');
+        const base64 = Buffer.from(file.data).toString("base64");
 
         const res = await axios.post(
-            whatsapp_api_url + '/send-file-base64',
+            WHATSAPP_API_URL + "/send-file-base64",
             {
-                number: '91' + String(number).replace(/\D/g, ''),
+                number: "91" + number.replace(/\D/g, ""),
                 base64,
-                mimeType: file.headers['content-type'] || 'application/octet-stream',
+                mimeType: "application/octet-stream",
                 fileName: name,
                 caption: name
             },
             {
                 headers: {
-                    'x-api-token': whatsapp_api_token,
-                    'Content-Type': 'application/json'
+                    "x-api-token": WHATSAPP_API_TOKEN
                 },
                 timeout: 20000
             }
         );
 
-        return res.data?.status === 'success';
+        return res.data?.status === "success";
 
     } catch (e) {
         console.log("WA ERROR:", e.message);
@@ -115,82 +106,96 @@ async function sendToWhatsAppGreen(number, fileId, type, name) {
 
 /* ================= BOT ================= */
 
-bot.on('message', async (msg) => {
+bot.on("message", async (msg) => {
 
-    const chatId = String(msg.chat.id);
-    const text = (msg.text || "").trim();
-    const lower = text.toLowerCase();
+    try {
 
-    if (chatId !== my_chat_id) return;
+        const chatId = String(msg.chat.id);
+        const text = (msg.text || "").trim();
+        const lower = text.toLowerCase();
 
-    const config = read(config_file, { password: "2739" });
+        if (chatId !== MY_CHAT_ID) return;
 
-    /* ================= UNBLOCK ================= */
+        const config = read(CONFIG, { password: "2739" });
 
-    if (lower === "unblock bot") {
-        try { fs.unlinkSync(blocked_file); } catch {}
-        try { fs.unlinkSync(attempts_file); } catch {}
+        /* ================= UNBLOCK ================= */
+        if (lower === "unblock bot") {
+            try { fs.unlinkSync(BLOCKED); } catch {}
+            return bot.sendMessage(chatId, "✅ Unblocked");
+        }
 
-        write(session_file, { last_time: Date.now() });
+        /* ================= BLOCK CHECK ================= */
+        if (fs.existsSync(BLOCKED)) {
+            return bot.sendMessage(chatId, "🚨 Bot Frozen");
+        }
 
-        return bot.sendMessage(chatId, "✅ Unblocked");
+        /* ================= LOGIN ================= */
+        if (text === config.password) {
+            write(SESSION, { last_time: Date.now() });
+            return bot.sendMessage(chatId, "🔓 Unlocked");
+        }
+
+        /* ================= LOCK ================= */
+        if (lower === "lock") {
+            try { fs.unlinkSync(SESSION); } catch {}
+            return bot.sendMessage(chatId, "🔒 Locked");
+        }
+
+        /* ================= SESSION CHECK ================= */
+        if (!isSessionValid()) {
+            return bot.sendMessage(chatId, "❌ Wrong Password");
+        }
+
+        /* ================= SHOW ================= */
+        if (lower === "show") {
+            const vault = read(DB, {});
+            return bot.sendMessage(chatId,
+                Object.keys(vault).join("\n") || "No Files"
+            );
+        }
+
+        /* ================= DELETE ================= */
+        if (lower.startsWith("del ")) {
+            const key = lower.replace("del ", "");
+            const vault = read(DB, {});
+            delete vault[key];
+            write(DB, vault);
+            return bot.sendMessage(chatId, "🗑 Deleted");
+        }
+
+        /* ================= CLEAN ALL ================= */
+        if (lower === "cleanall") {
+            write(DB, {});
+            return bot.sendMessage(chatId, "🧹 All Deleted");
+        }
+
+        /* ================= SEARCH ================= */
+
+        const vault = read(DB, {});
+        let matches = [];
+
+        for (let k in vault) {
+            if (k.includes(lower)) matches.push(k);
+        }
+
+        if (matches.length) {
+
+            const lock = read(SEARCH_LOCK, {});
+            lock[chatId] = matches;
+            write(SEARCH_LOCK, lock);
+
+            return bot.sendMessage(chatId,
+                "🔒 Found:\n" + matches.join("\n")
+            );
+        }
+
+        return bot.sendMessage(chatId, "❌ Not Found");
+
+    } catch (e) {
+        console.log("BOT ERROR:", e.message);
     }
-
-    /* ================= BLOCK CHECK ================= */
-
-    if (fs.existsSync(blocked_file)) {
-        return bot.sendMessage(chatId, "🚨 Bot Frozen");
-    }
-
-    /* ================= LOGIN ================= */
-
-    if (text === config.password) {
-        write(session_file, { last_time: Date.now() });
-        return bot.sendMessage(chatId, "🔓 Unlocked");
-    }
-
-    /* ================= LOCK ================= */
-
-    if (lower === "lock") {
-        try { fs.unlinkSync(session_file); } catch {}
-        return bot.sendMessage(chatId, "🔒 Locked");
-    }
-
-    /* ================= SESSION CHECK ================= */
-
-    if (!checkSession()) {
-        return bot.sendMessage(chatId, "❌ Wrong Password");
-    }
-
-    /* ================= SHOW ================= */
-
-    if (lower === "show") {
-        const vault = read(db_file, {});
-        return bot.sendMessage(chatId,
-            Object.keys(vault).join("\n") || "No Files"
-        );
-    }
-
-    /* ================= SEARCH ================= */
-
-    const vault = read(db_file, {});
-    let matches = [];
-
-    for (let k in vault) {
-        if (k.includes(lower)) matches.push(k);
-    }
-
-    if (matches.length) {
-        const lock = read(search_lock_file, {});
-        lock[chatId] = matches;
-        write(search_lock_file, lock);
-
-        return bot.sendMessage(chatId, "🔒 Found:\n" + matches.join("\n"));
-    }
-
-    return bot.sendMessage(chatId, "❌ Not Found");
 });
 
 /* ================= START ================= */
 
-console.log("BOT RUNNING");
+console.log("🚀 PRO BOT RUNNING");
