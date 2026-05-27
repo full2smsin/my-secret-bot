@@ -1,7 +1,3 @@
-// ======================================================
-// IMPORTS
-// ======================================================
-
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
@@ -430,7 +426,7 @@ async function clearTelegramPolling() {
 // ======================================================
 // BOT
 // ======================================================
-console.log(token);
+
 const bot =
 new TelegramBot(
     token,
@@ -438,6 +434,25 @@ new TelegramBot(
         polling: false
     }
 );
+
+// ======================================================
+// AUTO DELETE
+// ======================================================
+
+function autoDeleteMessage(
+    chatId,
+    messageId
+) {
+
+    setTimeout(() => {
+
+        bot.deleteMessage(
+            chatId,
+            messageId
+        ).catch(() => {});
+
+    }, 60000);
+}
 
 // ======================================================
 // SELF PING
@@ -464,23 +479,233 @@ setInterval(() => {
 }, 240000);
 
 // ======================================================
-// AUTO DELETE
+// WHATSAPP
 // ======================================================
 
-function autoDeleteMessage(
-    chatId,
-    messageId
+async function sendWhatsAppMessage(
+    number,
+    fileId,
+    fileName,
+    fileType,
+    chatId
 ) {
 
-    setTimeout(() => {
+    try {
 
-        bot.deleteMessage(
+        const cleanNumber =
+        number.replace(/\D/g, '');
+
+        const whatsappChatId =
+        cleanNumber + "@c.us";
+
+        const downloadUrl =
+        render_app_url +
+        "/download-vault-file?file_id=" +
+        encodeURIComponent(fileId) +
+        "&name=" +
+        encodeURIComponent(fileName) +
+        "&secret=" +
+        DOWNLOAD_SECRET;
+
+        const payload = {
+            chatId:
+            whatsappChatId,
+            urlFile:
+            downloadUrl,
+            fileName:
+            fileName
+        };
+
+        await axios.post(
+            "https://7105.api.greenapi.com/waInstance" +
+            green_api_instance +
+            "/sendFileByUrl/" +
+            green_api_token,
+            payload
+        );
+
+        bot.sendMessage(
             chatId,
-            messageId
-        ).catch(() => {});
+            "📲 WhatsApp Delivery Success!"
+        );
 
-    }, 60000);
+    } catch (error) {
+
+        console.error(
+            'WhatsApp Error:',
+            error.message
+        );
+
+        bot.sendMessage(
+            chatId,
+            "❌ WhatsApp Routing Failed."
+        );
+    }
 }
+
+// ======================================================
+// DOWNLOAD ROUTE
+// ======================================================
+
+app.get(
+    '/download-vault-file',
+    async (req, res) => {
+
+        try {
+
+            if (
+                req.query.secret !==
+                DOWNLOAD_SECRET
+            ) {
+
+                return res
+                .status(403)
+                .send('Unauthorized');
+            }
+
+            const fileId =
+            req.query.file_id;
+
+            const fileName =
+            req.query.name ||
+            'file';
+
+            if (!fileId) {
+
+                return res
+                .status(400)
+                .send(
+                    'Missing file_id'
+                );
+            }
+
+            const fileInfoUrl =
+            "https://api.telegram.org/bot" +
+            token +
+            "/getFile?file_id=" +
+            fileId;
+
+            const fileInfoRes =
+            await axios.get(
+                fileInfoUrl
+            );
+
+            const filePath =
+            fileInfoRes.data
+            .result
+            .file_path;
+
+            const telegramDownloadUrl =
+            "https://api.telegram.org/file/bot" +
+            token +
+            "/" +
+            filePath;
+
+            const streamResponse =
+            await axios({
+                method: 'get',
+                url:
+                telegramDownloadUrl,
+                responseType:
+                'stream'
+            });
+
+            res.setHeader(
+                'Content-Disposition',
+                'attachment; filename="' +
+                encodeURIComponent(
+                    fileName
+                ) +
+                '"'
+            );
+
+            streamResponse
+            .data
+            .pipe(res);
+
+        } catch (error) {
+
+            console.error(
+                'Download Error:',
+                error.message
+            );
+
+            res.status(500)
+            .send(
+                'Internal Server Error'
+            );
+        }
+    }
+);
+
+// ======================================================
+// BOT MESSAGE
+// ======================================================
+
+bot.on(
+    'message',
+    async (msg) => {
+
+        try {
+
+            const chatId =
+            msg.chat.id.toString();
+
+            const text =
+            msg.text || '';
+
+            // ======================================================
+            // INTRUDER ALERT
+            // ======================================================
+
+            if (
+                chatId.toString() !==
+                my_chat_id.toString()
+            ) {
+
+                bot.sendMessage(
+                    my_chat_id,
+                    "⚠ Intruder Activity Logged\n\n" +
+                    "Name: " +
+                    (msg.from.first_name || '') +
+                    "\nUsername: @" +
+                    (msg.from.username || 'none') +
+                    "\nChat ID: " +
+                    chatId +
+                    "\nMessage: " +
+                    (text || '[MEDIA]')
+                ).catch(console.log);
+            }
+
+            // ======================================================
+            // START
+            // ======================================================
+
+            if (text === '/start') {
+
+                const sent =
+                await bot.sendMessage(
+                    chatId,
+                    "🔒 Secure Digital Vault Activated"
+                );
+
+                autoDeleteMessage(
+                    chatId,
+                    sent.message_id
+                );
+
+                return;
+            }
+
+        } catch (error) {
+
+            console.error(
+                'BOT ERROR:',
+                error.message
+            );
+        }
+    }
+);
 
 // ======================================================
 // START
@@ -491,7 +716,7 @@ async function startBot() {
     await clearTelegramPolling();
 
     await new Promise(resolve =>
-        setTimeout(resolve, 5000)
+        setTimeout(resolve, 10000)
     );
 
     await downloadBackupFromGist();
