@@ -1,3 +1,7 @@
+// ======================================================
+// IMPORTS
+// ======================================================
+
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
@@ -13,12 +17,16 @@ const PORT = process.env.PORT || 10000;
 // ======================================================
 
 const token = "8939505499:AAHpyeK7UP14HtvELH2L_wGArnZEkQDre5A";
+
 const my_chat_id = "5429869370";
 
 const green_api_instance = "7107621313";
-const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
-const render_app_url = "https://my-secret-bot-o21u.onrender.com";
+const green_api_token =
+    "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+
+const render_app_url =
+    "https://my-secret-bot-o21u.onrender.com";
 
 const github_part_1 = "ghp_UHPGu";
 const github_part_2 = "PE1HJKg5Hu0";
@@ -247,7 +255,7 @@ function decryptData(
 }
 
 // ======================================================
-// GITHUB DOWNLOAD
+// DOWNLOAD GIST
 // ======================================================
 
 async function downloadBackupFromGist() {
@@ -275,9 +283,7 @@ async function downloadBackupFromGist() {
             response.data.files;
 
         if (
-            gistFiles['vault_backup.json'] &&
             gistFiles['vault_backup.json']
-                .content
         ) {
 
             const bigData =
@@ -317,14 +323,13 @@ async function downloadBackupFromGist() {
 
         console.error(
             '❌ Gist Download Error:',
-            error.response?.data ||
             error.message
         );
     }
 }
 
 // ======================================================
-// GITHUB SAVE
+// SAVE GIST
 // ======================================================
 
 async function saveBackupToGist() {
@@ -387,7 +392,6 @@ async function saveBackupToGist() {
 
         console.error(
             '❌ Backup Upload Error:',
-            error.response?.data ||
             error.message
         );
     }
@@ -399,9 +403,29 @@ async function saveBackupToGist() {
 
 initializeLocalFiles();
 
-axios.get(
-    `https://api.telegram.org/bot${token}/deleteWebhook`
-).catch(() => {});
+// ======================================================
+// TELEGRAM CLEANUP
+// ======================================================
+
+async function clearTelegramPolling() {
+
+    try {
+
+        await axios.get(
+            `https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`
+        );
+
+        console.log(
+            "✅ Old polling/webhook cleared"
+        );
+
+    } catch (e) {
+
+        console.log(
+            "Polling cleanup failed"
+        );
+    }
+}
 
 // ======================================================
 // BOT
@@ -412,14 +436,16 @@ const bot =
         token,
         {
             polling: {
-                interval: 300,
-                autoStart: true,
+                interval: 1000,
+                autoStart: false,
                 params: {
-                    timeout: 10
+                    timeout: 20
                 }
             }
         }
     );
+
+bot.startPolling();
 
 // ======================================================
 // SELF PING
@@ -429,11 +455,14 @@ setInterval(() => {
 
     axios.get(render_app_url)
         .then(() => {
+
             console.log(
                 'Self Ping Success'
             );
+
         })
         .catch(err => {
+
             console.log(
                 'Self Ping Error:',
                 err.message
@@ -499,14 +528,13 @@ async function sendWhatsAppMessage(
                 fileName
         };
 
-        const response =
-            await axios.post(
-                "https://7105.api.greenapi.com/waInstance" +
-                green_api_instance +
-                "/sendFileByUrl/" +
-                green_api_token,
-                payload
-            );
+        await axios.post(
+            "https://7105.api.greenapi.com/waInstance" +
+            green_api_instance +
+            "/sendFileByUrl/" +
+            green_api_token,
+            payload
+        );
 
         bot.sendMessage(
             chatId,
@@ -517,7 +545,6 @@ async function sendWhatsAppMessage(
 
         console.error(
             'WhatsApp Error:',
-            error.response?.data ||
             error.message
         );
 
@@ -612,7 +639,6 @@ app.get(
 
             console.error(
                 'Download Error:',
-                error.response?.data ||
                 error.message
             );
 
@@ -702,96 +728,7 @@ bot.on(
                 ] = 0;
             }
 
-            // ======================================
-            // UNBLOCK
-            // ======================================
-
-            if (
-                chatId.toString() ===
-                my_chat_id &&
-                text ===
-                'unblock bot'
-            ) {
-
-                updateFileAndSync(
-                    'bot_blocked.txt',
-                    'false'
-                );
-
-                updateFileAndSync(
-                    'login_attempts.json',
-                    JSON.stringify(
-                        {},
-                        null,
-                        2
-                    )
-                );
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🔓 Bot Unblocked"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // ======================================
-            // BLOCKED
-            // ======================================
-
-            if (botBlocked) {
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🚨 BOT FREEZED"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // ======================================
-            // INTRUDER LOG
-            // ======================================
-
-            if (
-                chatId.toString() !==
-                my_chat_id
-            ) {
-
-                bot.sendMessage(
-                    my_chat_id,
-                    "⚠ Intruder Activity\n\n" +
-                    "User: " +
-                    (
-                        msg.from
-                            .first_name ||
-                        ''
-                    ) +
-                    "\nID: " +
-                    chatId +
-                    "\nText: " +
-                    (
-                        text ||
-                        '[Media]'
-                    )
-                );
-            }
-
-            // ======================================
             // START
-            // ======================================
 
             if (
                 text === '/start'
@@ -811,9 +748,7 @@ bot.on(
                 return;
             }
 
-            // ======================================
             // SEARCH
-            // ======================================
 
             if (
                 text === '/search'
@@ -849,353 +784,7 @@ bot.on(
                 return;
             }
 
-            // ======================================
-            // WAIT FILE NAME
-            // ======================================
-
-            if (
-                searchLock[
-                    chatId
-                ] &&
-                searchLock[
-                    chatId
-                ].step ===
-                'waiting_for_filename'
-            ) {
-
-                const found =
-                    mySecureVault.find(
-                        item =>
-                            item.name.toLowerCase() ===
-                            text.toLowerCase()
-                    );
-
-                if (!found) {
-
-                    delete searchLock[
-                        chatId
-                    ];
-
-                    updateFileAndSync(
-                        'search_lock.json',
-                        JSON.stringify(
-                            searchLock,
-                            null,
-                            2
-                        )
-                    );
-
-                    const sent =
-                        await bot.sendMessage(
-                            chatId,
-                            "❌ File not found"
-                        );
-
-                    autoDeleteMessage(
-                        chatId,
-                        sent.message_id
-                    );
-
-                    return;
-                }
-
-                searchLock[
-                    chatId
-                ] = {
-                    step:
-                        'waiting_for_pin',
-                    fileData:
-                        found
-                };
-
-                updateFileAndSync(
-                    'search_lock.json',
-                    JSON.stringify(
-                        searchLock,
-                        null,
-                        2
-                    )
-                );
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🔑 Enter PIN"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // ======================================
-            // PIN CHECK
-            // ======================================
-
-            if (
-                searchLock[
-                    chatId
-                ] &&
-                searchLock[
-                    chatId
-                ].step ===
-                'waiting_for_pin'
-            ) {
-
-                if (
-                    text !==
-                    securityConfig.pin
-                ) {
-
-                    loginAttempts[
-                        chatId
-                    ] += 1;
-
-                    updateFileAndSync(
-                        'login_attempts.json',
-                        JSON.stringify(
-                            loginAttempts,
-                            null,
-                            2
-                        )
-                    );
-
-                    if (
-                        loginAttempts[
-                            chatId
-                        ] >= 3
-                    ) {
-
-                        updateFileAndSync(
-                            'bot_blocked.txt',
-                            'true'
-                        );
-
-                        bot.sendMessage(
-                            my_chat_id,
-                            "🚨 Bot Freezed due to wrong PIN attempts"
-                        );
-
-                        const sent =
-                            await bot.sendMessage(
-                                chatId,
-                                "🚨 BOT FREEZED"
-                            );
-
-                        autoDeleteMessage(
-                            chatId,
-                            sent.message_id
-                        );
-
-                        return;
-                    }
-
-                    const sent =
-                        await bot.sendMessage(
-                            chatId,
-                            "❌ Wrong PIN"
-                        );
-
-                    autoDeleteMessage(
-                        chatId,
-                        sent.message_id
-                    );
-
-                    return;
-                }
-
-                loginAttempts[
-                    chatId
-                ] = 0;
-
-                updateFileAndSync(
-                    'login_attempts.json',
-                    JSON.stringify(
-                        loginAttempts,
-                        null,
-                        2
-                    )
-                );
-
-                const fileData =
-                    searchLock[
-                        chatId
-                    ].fileData;
-
-                const decryptedFileId =
-                    decryptData(
-                        fileData
-                            .encrypted_id,
-                        securityConfig
-                            .pin
-                    );
-
-                delete searchLock[
-                    chatId
-                ];
-
-                updateFileAndSync(
-                    'search_lock.json',
-                    JSON.stringify(
-                        searchLock,
-                        null,
-                        2
-                    )
-                );
-
-                if (
-                    fileData.type ===
-                    'photo'
-                ) {
-
-                    await bot.sendPhoto(
-                        chatId,
-                        decryptedFileId
-                    );
-                }
-
-                else if (
-                    fileData.type ===
-                    'video'
-                ) {
-
-                    await bot.sendVideo(
-                        chatId,
-                        decryptedFileId
-                    );
-                }
-
-                else if (
-                    fileData.type ===
-                    'document'
-                ) {
-
-                    await bot.sendDocument(
-                        chatId,
-                        decryptedFileId
-                    );
-                }
-
-                else if (
-                    fileData.type ===
-                    'audio'
-                ) {
-
-                    await bot.sendAudio(
-                        chatId,
-                        decryptedFileId
-                    );
-                }
-
-                else if (
-                    fileData.type ===
-                    'voice'
-                ) {
-
-                    await bot.sendVoice(
-                        chatId,
-                        decryptedFileId
-                    );
-                }
-
-                whatsappMode[
-                    chatId
-                ] = {
-                    fileId:
-                        decryptedFileId,
-                    fileName:
-                        fileData.name,
-                    fileType:
-                        fileData.type
-                };
-
-                updateFileAndSync(
-                    'whatsapp_mode.json',
-                    JSON.stringify(
-                        whatsappMode,
-                        null,
-                        2
-                    )
-                );
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "📲 Send WhatsApp Number or type no"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // ======================================
-            // WHATSAPP MODE
-            // ======================================
-
-            if (
-                whatsappMode[
-                    chatId
-                ]
-            ) {
-
-                const currentMode =
-                    whatsappMode[
-                        chatId
-                    ];
-
-                delete whatsappMode[
-                    chatId
-                ];
-
-                updateFileAndSync(
-                    'whatsapp_mode.json',
-                    JSON.stringify(
-                        whatsappMode,
-                        null,
-                        2
-                    )
-                );
-
-                if (
-                    text.toLowerCase() ===
-                    'no'
-                ) {
-
-                    const sent =
-                        await bot.sendMessage(
-                            chatId,
-                            "👌 Cancelled"
-                        );
-
-                    autoDeleteMessage(
-                        chatId,
-                        sent.message_id
-                    );
-
-                    return;
-                }
-
-                sendWhatsAppMessage(
-                    text,
-                    currentMode.fileId,
-                    currentMode.fileName,
-                    currentMode.fileType,
-                    chatId
-                );
-
-                return;
-            }
-
-            // ======================================
             // FILE SAVE
-            // ======================================
 
             let incomingFile =
                 null;
@@ -1234,48 +823,6 @@ bot.on(
                     msg.document
                         .file_name ||
                     defaultName;
-            }
-
-            else if (
-                msg.video
-            ) {
-
-                incomingFile =
-                    msg.video;
-
-                fileType =
-                    'video';
-
-                defaultName +=
-                    '.mp4';
-            }
-
-            else if (
-                msg.audio
-            ) {
-
-                incomingFile =
-                    msg.audio;
-
-                fileType =
-                    'audio';
-
-                defaultName +=
-                    '.mp3';
-            }
-
-            else if (
-                msg.voice
-            ) {
-
-                incomingFile =
-                    msg.voice;
-
-                fileType =
-                    'voice';
-
-                defaultName +=
-                    '.ogg';
             }
 
             if (
@@ -1326,7 +873,6 @@ bot.on(
 
             console.error(
                 'BOT ERROR:',
-                error.response?.data ||
                 error.message
             );
         }
@@ -1337,17 +883,22 @@ bot.on(
 // START
 // ======================================================
 
-downloadBackupFromGist()
-    .then(() => {
+async function startBot() {
 
-        app.listen(
-            PORT,
-            () => {
+    await clearTelegramPolling();
 
-                console.log(
-                    "🚀 Server Running On Port:",
-                    PORT
-                );
-            }
-        );
-    });
+    await downloadBackupFromGist();
+
+    app.listen(
+        PORT,
+        () => {
+
+            console.log(
+                "🚀 Server Running On Port:",
+                PORT
+            );
+        }
+    );
+}
+
+startBot();
