@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 10000;
 const token = "8939505499:AAHpyeK7UP14HtvELH2L_wGArnZEkQDre5A";
 const my_chat_id = "5429869370";
 
-onst green_api_instance = "7107621313";
+const green_api_instance = "7107621313";
 const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
