@@ -23,10 +23,10 @@ const my_chat_id = "5429869370";
 const green_api_instance = "7107621313";
 
 const green_api_token =
-    "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
+"960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
 const render_app_url =
-    "https://my-secret-bot-o21u.onrender.com";
+"https://my-secret-bot-o21u.onrender.com";
 
 const github_part_1 = "ghp_UHPGu";
 const github_part_2 = "PE1HJKg5Hu0";
@@ -34,16 +34,16 @@ const github_part_3 = "oy3S1ThLm1";
 const github_part_4 = "IRaW2yBfuL";
 
 const GITHUB_TOKEN =
-    github_part_1 +
-    github_part_2 +
-    github_part_3 +
-    github_part_4;
+github_part_1 +
+github_part_2 +
+github_part_3 +
+github_part_4;
 
 const GIST_ID =
-    "a7e6615d2b0ea4e6fc026dc7f31e0f3e";
+"a7e6615d2b0ea4e6fc026dc7f31e0f3e";
 
 const DOWNLOAD_SECRET =
-    "2739secure";
+"2739secure";
 
 // ======================================================
 // EXPRESS
@@ -107,7 +107,7 @@ function initializeLocalFiles() {
     Object.keys(defaults).forEach(file => {
 
         const filePath =
-            path.join(__dirname, file);
+        path.join(__dirname, file);
 
         if (!fs.existsSync(filePath)) {
 
@@ -123,10 +123,10 @@ function initializeLocalFiles() {
     });
 
     const blockedPath =
-        path.join(
-            __dirname,
-            'bot_blocked.txt'
-        );
+    path.join(
+        __dirname,
+        'bot_blocked.txt'
+    );
 
     if (!fs.existsSync(blockedPath)) {
 
@@ -167,31 +167,31 @@ function encryptData(
 ) {
 
     const iv =
-        crypto.randomBytes(16);
+    crypto.randomBytes(16);
 
     const key =
-        crypto.scryptSync(
-            secretKey,
-            'salt',
-            32
-        );
+    crypto.scryptSync(
+        secretKey,
+        'salt',
+        32
+    );
 
     const cipher =
-        crypto.createCipheriv(
-            'aes-256-cbc',
-            key,
-            iv
-        );
+    crypto.createCipheriv(
+        'aes-256-cbc',
+        key,
+        iv
+    );
 
     let encrypted =
-        cipher.update(
-            text,
-            'utf8',
-            'hex'
-        );
+    cipher.update(
+        text,
+        'utf8',
+        'hex'
+    );
 
     encrypted +=
-        cipher.final('hex');
+    cipher.final('hex');
 
     return (
         iv.toString('hex') +
@@ -208,43 +208,43 @@ function decryptData(
     try {
 
         const textParts =
-            text.split(':');
+        text.split(':');
 
         const iv =
-            Buffer.from(
-                textParts.shift(),
-                'hex'
-            );
+        Buffer.from(
+            textParts.shift(),
+            'hex'
+        );
 
         const encryptedText =
-            Buffer.from(
-                textParts.join(':'),
-                'hex'
-            );
+        Buffer.from(
+            textParts.join(':'),
+            'hex'
+        );
 
         const key =
-            crypto.scryptSync(
-                secretKey,
-                'salt',
-                32
-            );
+        crypto.scryptSync(
+            secretKey,
+            'salt',
+            32
+        );
 
         const decipher =
-            crypto.createDecipheriv(
-                'aes-256-cbc',
-                key,
-                iv
-            );
+        crypto.createDecipheriv(
+            'aes-256-cbc',
+            key,
+            iv
+        );
 
         let decrypted =
-            decipher.update(
-                encryptedText,
-                'hex',
-                'utf8'
-            );
+        decipher.update(
+            encryptedText,
+            'hex',
+            'utf8'
+        );
 
         decrypted +=
-            decipher.final('utf8');
+        decipher.final('utf8');
 
         return decrypted;
 
@@ -267,31 +267,31 @@ async function downloadBackupFromGist() {
         );
 
         const response =
-            await axios.get(
-                "https://api.github.com/gists/" +
-                GIST_ID,
-                {
-                    headers: {
-                        Authorization:
-                            "token " +
-                            GITHUB_TOKEN
-                    }
+        await axios.get(
+            "https://api.github.com/gists/" +
+            GIST_ID,
+            {
+                headers: {
+                    Authorization:
+                    "token " +
+                    GITHUB_TOKEN
                 }
-            );
+            }
+        );
 
         const gistFiles =
-            response.data.files;
+        response.data.files;
 
         if (
             gistFiles['vault_backup.json']
         ) {
 
             const bigData =
-                JSON.parse(
-                    gistFiles[
-                        'vault_backup.json'
-                    ].content
-                );
+            JSON.parse(
+                gistFiles[
+                    'vault_backup.json'
+                ].content
+            );
 
             FILES_TO_SYNC.forEach(
                 fileName => {
@@ -342,20 +342,20 @@ async function saveBackupToGist() {
             fileName => {
 
                 const filePath =
-                    path.join(
-                        __dirname,
-                        fileName
-                    );
+                path.join(
+                    __dirname,
+                    fileName
+                );
 
                 if (
                     fs.existsSync(filePath)
                 ) {
 
                     bigData[fileName] =
-                        fs.readFileSync(
-                            filePath,
-                            'utf8'
-                        );
+                    fs.readFileSync(
+                        filePath,
+                        'utf8'
+                    );
                 }
             }
         );
@@ -367,19 +367,19 @@ async function saveBackupToGist() {
                 files: {
                     'vault_backup.json': {
                         content:
-                            JSON.stringify(
-                                bigData,
-                                null,
-                                2
-                            )
+                        JSON.stringify(
+                            bigData,
+                            null,
+                            2
+                        )
                     }
                 }
             },
             {
                 headers: {
                     Authorization:
-                        "token " +
-                        GITHUB_TOKEN
+                    "token " +
+                    GITHUB_TOKEN
                 }
             }
         );
@@ -432,20 +432,12 @@ async function clearTelegramPolling() {
 // ======================================================
 
 const bot =
-    new TelegramBot(
-        token,
-        {
-            polling: {
-                interval: 1000,
-                autoStart: false,
-                params: {
-                    timeout: 20
-                }
-            }
-        }
-    );
-
-bot.startPolling();
+new TelegramBot(
+    token,
+    {
+        polling: false
+    }
+);
 
 // ======================================================
 // SELF PING
@@ -454,20 +446,20 @@ bot.startPolling();
 setInterval(() => {
 
     axios.get(render_app_url)
-        .then(() => {
+    .then(() => {
 
-            console.log(
-                'Self Ping Success'
-            );
+        console.log(
+            'Self Ping Success'
+        );
 
-        })
-        .catch(err => {
+    })
+    .catch(err => {
 
-            console.log(
-                'Self Ping Error:',
-                err.message
-            );
-        });
+        console.log(
+            'Self Ping Error:',
+            err.message
+        );
+    });
 
 }, 240000);
 
@@ -491,395 +483,6 @@ function autoDeleteMessage(
 }
 
 // ======================================================
-// WHATSAPP
-// ======================================================
-
-async function sendWhatsAppMessage(
-    number,
-    fileId,
-    fileName,
-    fileType,
-    chatId
-) {
-
-    try {
-
-        const cleanNumber =
-            number.replace(/\D/g, '');
-
-        const whatsappChatId =
-            cleanNumber + "@c.us";
-
-        const downloadUrl =
-            render_app_url +
-            "/download-vault-file?file_id=" +
-            encodeURIComponent(fileId) +
-            "&name=" +
-            encodeURIComponent(fileName) +
-            "&secret=" +
-            DOWNLOAD_SECRET;
-
-        const payload = {
-            chatId:
-                whatsappChatId,
-            urlFile:
-                downloadUrl,
-            fileName:
-                fileName
-        };
-
-        await axios.post(
-            "https://7105.api.greenapi.com/waInstance" +
-            green_api_instance +
-            "/sendFileByUrl/" +
-            green_api_token,
-            payload
-        );
-
-        bot.sendMessage(
-            chatId,
-            "📲 WhatsApp Delivery Success!"
-        );
-
-    } catch (error) {
-
-        console.error(
-            'WhatsApp Error:',
-            error.message
-        );
-
-        bot.sendMessage(
-            chatId,
-            "❌ WhatsApp Routing Failed."
-        );
-    }
-}
-
-// ======================================================
-// DOWNLOAD ROUTE
-// ======================================================
-
-app.get(
-    '/download-vault-file',
-    async (req, res) => {
-
-        try {
-
-            if (
-                req.query.secret !==
-                DOWNLOAD_SECRET
-            ) {
-
-                return res
-                    .status(403)
-                    .send('Unauthorized');
-            }
-
-            const fileId =
-                req.query.file_id;
-
-            const fileName =
-                req.query.name ||
-                'file';
-
-            if (!fileId) {
-
-                return res
-                    .status(400)
-                    .send(
-                        'Missing file_id'
-                    );
-            }
-
-            const fileInfoUrl =
-                "https://api.telegram.org/bot" +
-                token +
-                "/getFile?file_id=" +
-                fileId;
-
-            const fileInfoRes =
-                await axios.get(
-                    fileInfoUrl
-                );
-
-            const filePath =
-                fileInfoRes.data
-                    .result
-                    .file_path;
-
-            const telegramDownloadUrl =
-                "https://api.telegram.org/file/bot" +
-                token +
-                "/" +
-                filePath;
-
-            const streamResponse =
-                await axios({
-                    method: 'get',
-                    url:
-                        telegramDownloadUrl,
-                    responseType:
-                        'stream'
-                });
-
-            res.setHeader(
-                'Content-Disposition',
-                'attachment; filename="' +
-                encodeURIComponent(
-                    fileName
-                ) +
-                '"'
-            );
-
-            streamResponse
-                .data
-                .pipe(res);
-
-        } catch (error) {
-
-            console.error(
-                'Download Error:',
-                error.message
-            );
-
-            res.status(500)
-                .send(
-                    'Internal Server Error'
-                );
-        }
-    }
-);
-
-// ======================================================
-// BOT MESSAGE
-// ======================================================
-
-bot.on(
-    'message',
-    async (msg) => {
-
-        try {
-
-            const chatId =
-                msg.chat.id
-                    .toString();
-
-            const text =
-                msg.text || '';
-
-            let botBlocked =
-                fs.readFileSync(
-                    path.join(
-                        __dirname,
-                        'bot_blocked.txt'
-                    ),
-                    'utf8'
-                ) === 'true';
-
-            let loginAttempts =
-                safeReadJSON(
-                    'login_attempts.json',
-                    {}
-                );
-
-            let securityConfig =
-                safeReadJSON(
-                    'security_config.json',
-                    {
-                        pin: '2739'
-                    }
-                );
-
-            let mySecureVault =
-                safeReadJSON(
-                    'my_secure_vault.json',
-                    []
-                );
-
-            if (
-                !Array.isArray(
-                    mySecureVault
-                )
-            ) {
-
-                mySecureVault = [];
-            }
-
-            let searchLock =
-                safeReadJSON(
-                    'search_lock.json',
-                    {}
-                );
-
-            let whatsappMode =
-                safeReadJSON(
-                    'whatsapp_mode.json',
-                    {}
-                );
-
-            if (
-                !loginAttempts[
-                    chatId
-                ]
-            ) {
-
-                loginAttempts[
-                    chatId
-                ] = 0;
-            }
-
-            // START
-
-            if (
-                text === '/start'
-            ) {
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🔒 Secure Digital Vault Activated"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // SEARCH
-
-            if (
-                text === '/search'
-            ) {
-
-                searchLock[
-                    chatId
-                ] = {
-                    step:
-                        'waiting_for_filename'
-                };
-
-                updateFileAndSync(
-                    'search_lock.json',
-                    JSON.stringify(
-                        searchLock,
-                        null,
-                        2
-                    )
-                );
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🔍 Enter file name"
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-
-                return;
-            }
-
-            // FILE SAVE
-
-            let incomingFile =
-                null;
-
-            let fileType = '';
-
-            let defaultName =
-                "file_" +
-                Date.now();
-
-            if (msg.photo) {
-
-                incomingFile =
-                    msg.photo[
-                        msg.photo.length - 1
-                    ];
-
-                fileType =
-                    'photo';
-
-                defaultName +=
-                    '.jpg';
-            }
-
-            else if (
-                msg.document
-            ) {
-
-                incomingFile =
-                    msg.document;
-
-                fileType =
-                    'document';
-
-                defaultName =
-                    msg.document
-                        .file_name ||
-                    defaultName;
-            }
-
-            if (
-                incomingFile
-            ) {
-
-                const encryptedFileId =
-                    encryptData(
-                        incomingFile.file_id,
-                        securityConfig.pin
-                    );
-
-                mySecureVault.push({
-                    name:
-                        defaultName,
-                    type:
-                        fileType,
-                    encrypted_id:
-                        encryptedFileId,
-                    timestamp:
-                        new Date()
-                            .toISOString()
-                });
-
-                updateFileAndSync(
-                    'my_secure_vault.json',
-                    JSON.stringify(
-                        mySecureVault,
-                        null,
-                        2
-                    )
-                );
-
-                const sent =
-                    await bot.sendMessage(
-                        chatId,
-                        "🔒 Encrypted & Saved\n\n" +
-                        defaultName
-                    );
-
-                autoDeleteMessage(
-                    chatId,
-                    sent.message_id
-                );
-            }
-
-        } catch (error) {
-
-            console.error(
-                'BOT ERROR:',
-                error.message
-            );
-        }
-    }
-);
-
-// ======================================================
 // START
 // ======================================================
 
@@ -887,7 +490,13 @@ async function startBot() {
 
     await clearTelegramPolling();
 
+    await new Promise(resolve =>
+        setTimeout(resolve, 5000)
+    );
+
     await downloadBackupFromGist();
+
+    await bot.startPolling();
 
     app.listen(
         PORT,
