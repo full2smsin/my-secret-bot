@@ -24,7 +24,7 @@ const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
 
-const GITHUB_TOKEN = "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";
+const GITHUB_TOKEN = "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";
 const GIST_ID = "a7e6615d2b0ea4e6fc026dc7f31e0f3e";
 
 const DOWNLOAD_SECRET = "2739secure";
