@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
 // CONFIG
 // =====================================================
 
-const token = "8739567989:AAG9y7YlA-A6VIEvJcyHdXzRoblJodZAwMk";
+const token = "8939505499:AAHpyeK7UP14HtvELH2L_wGArnZEkQDre5A";
 const my_chat_id = "5429869370";
 
 const green_api_instance = "7107621313";
