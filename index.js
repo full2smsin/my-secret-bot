@@ -430,7 +430,7 @@ async function clearTelegramPolling() {
 // ======================================================
 // BOT
 // ======================================================
-
+console.log(token);
 const bot =
 new TelegramBot(
     token,
