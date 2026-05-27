@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 10000;
 // CONFIG
 // ======================================================
 
-const token = "8939505499:AAHpyeK7UP14HtvELH2L_wGArnZEkQDre5A";
+const token = "8939505499:AAEI6pHv4b0Yoa4ChDZg_gWioDjQWnUcGRo";
 
 const my_chat_id = "5429869370";
 
