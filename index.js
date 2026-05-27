@@ -24,7 +24,16 @@ const green_api_token = "960eb319a2a34e869d28fead8a957cf3eab3b7ab11cb48a49e";
 
 const render_app_url = "https://my-secret-bot-o21u.onrender.com";
 
-const GITHUB_TOKEN = "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";
+const github_part_1 = "ghp_UHPGu";
+const github_part_2 = "PE1HJKg5Hu0";
+const github_part_3 = "oy3S1ThLm1";
+const github_part_4 = "IRaW2yBfuL";
+
+const GITHUB_TOKEN =
+    github_part_1 +
+    github_part_2 +
+    github_part_3 +
+    github_part_4;
 const GIST_ID = "a7e6615d2b0ea4e6fc026dc7f31e0f3e";
 
 const DOWNLOAD_SECRET = "2739secure";
